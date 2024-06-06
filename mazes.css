@@ -1,4 +1,17 @@
 body,
 html {
-    overflow: hidden
+  overflow: hidden
+}
+
+#canvasdiv {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#menu {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  width: fit-content;
 }
