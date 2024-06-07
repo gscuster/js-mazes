@@ -13,7 +13,8 @@ let state = {
     lineWidth: 3,
     strokeStyle: '#000000'
   },
-  padding: 64
+  padding: 64,
+  showIndices: false
 }
 
 document.onreadystatechange = () => {
@@ -39,9 +40,9 @@ const drawMaze = (ctx, mazeSettings, maze) => {
   ctx.lineWidth = mazeSettings.lineWidth
   ctx.strokeStyle = mazeSettings.strokeStyle
   for (let i = 0; i < maze.length; i++) {
-    y = mazeSettings.cellDimensions[1] * i + mazeSettings.position[1]
+    let y = mazeSettings.cellDimensions[1] * i + mazeSettings.position[1]
     for (let j = 0; j < maze[i].length; j++) {
-      x = mazeSettings.cellDimensions[0] * j + mazeSettings.position[0]
+      let x = mazeSettings.cellDimensions[0] * j + mazeSettings.position[0]
       if (maze[i][j] & 1) {
         ctx.beginPath()
         ctx.moveTo(x, y)
@@ -58,11 +59,40 @@ const drawMaze = (ctx, mazeSettings, maze) => {
       }
     }
   }
+  if (state.showIndices) {
+    drawMazeIndices(ctx, mazeSettings, maze)
+  }
+}
+
+/**
+ * 
+ * @param {CanvasRenderingContext2D} ctx 
+ * @param {*} param1 
+ * @param {*} maze 
+ */
+const drawMazeIndices = (ctx, {position, cellDimensions}, maze) => {
+  let x = position[0] + cellDimensions[0] / 2
+  let y = position[1] + cellDimensions[1] / 2
+  let nCellX = maze.length - 1
+  let nCellY = maze[0].length - 1
+
+  ctx.textAlign = 'center';
+  for (let i = 0; i < nCellY; i++) {
+    for (let j = 0; j < nCellX; j++) {
+      ctx.fillText((i * nCellX + j).toString(), x, y);
+      x += cellDimensions[0]
+    }
+    y += cellDimensions[1]
+    x -= cellDimensions[0] * nCellX
+  }
 }
 
 const generateMaze = () => {
-  const maze = state.mazeSettings.algorithm(4, 4)
+  const x = parseInt(document.getElementById('ncellx').value)
+  const y = parseInt(document.getElementById('ncelly').value)
+  const maze = state.mazeSettings.algorithm(x, y)
   state.maze = maze
+  resizeMaze(document.getElementById('gs'))
 }
 
 const preDraw = (canvas, ctx) => {
@@ -108,29 +138,38 @@ const setup = () => {
   window.addEventListener("resize", () => { resizeCanvas(canvas) });
 
   setupMenu()
-
-  resizeMaze(canvas)
   state.mazeSettings.algorithm = binaryTree
+  generateMaze()
   run(canvas, ctx)
 }
 
 const setupMenu = () => {
-  document.getElementById('buttongenerate').onclick = generateMaze
+  document.getElementById('generate').onclick = generateMaze
+  const showIndicesCheckbox = document.getElementById('showindices')
+  showIndicesCheckbox.addEventListener('change', (event) => {
+    state.showIndices = event.currentTarget.checked
+  })
 }
 
 // Algorithms
 
 const binaryTree = (nCellsX, nCellsY) => {
-  let maze = []
-  // Walls inside maze
-  for (i = 0; i < nCellsY; i++) {
-    maze[i] = []
-    for (j = 0; j < nCellsX; j++) {
+  let maze = Array(nCellsY + 1).fill().map(() => Array(nCellsX + 1).fill(0))
+  for (let i = 1; i < nCellsY + 1; i++) {
+    for (let j = 1; j < nCellsX + 1; j++) {
       maze[i][j] = Math.ceil(Math.random()*2)
     }
-    maze[i][nCellsY] = 2 // Right edge
   }
-  maze[nCellsY] = Array(nCellsX).fill(1)
+  maze[0][0] = 3
+  for (let i = 0; i < nCellsY; i++) {
+    maze[i][0] |= 2
+    maze[i][nCellsX] = 2
+  }
+  for (let i = 0; i < nCellsX; i++) {
+    maze[0][i] |= 1
+    maze[nCellsY][i] = 1
+  }
+  maze[nCellsY][nCellsX] = 0
   // Outer edge of maze
   return maze.reverse()
 }
