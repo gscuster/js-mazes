@@ -1,3 +1,84 @@
+// Cell functions
+
+function Cell (row, column) {
+  this.row = row
+  this.column = column
+  this.north = null
+  this.south = null
+  this.east = null
+  this.west = null
+  this.links = {}
+}
+
+/**
+ * 
+ * @param {Cell} cell 
+ */
+Cell.prototype.link = (cell, bidi = true) => {
+  this.links[cell] = true
+  if (bidi) cell.link(this, false)
+}
+
+/**
+ * 
+ * @param {Cell} cell 
+ */
+Cell.prototype.unlink = (cell, bidi=true) => {
+  this.links[cell] = false
+  if (bidi) cell.unlink(this, false)
+}
+
+Cell.prototype.neighbors = () => {
+  let lst = []
+  if (this.north) lst.push(this.north)
+  if (this.south) lst.push(this.south)
+  if (this.east) lst.push(this.east)
+  if (this.west) lst.push(this.west)
+  return lst
+}
+
+// Grid functions
+
+function Grid (rows, columns) {
+  this.rows = rows
+  this.columns = columns
+  this.grid = this.prepareGrid()
+  this.configureCells()
+}
+
+Grid.prototype.prepareGrid = function () {
+  let grid = []
+  for (let i = 0; i < this.rows; i++) {
+    grid[i] = []
+    for (let j = 0; j < this.columns; j++) {
+      grid[i][j] = new Cell(i, j)
+    }
+  }
+  return grid
+}
+
+Grid.prototype.configureCells = function () {
+  let grid = this.grid
+  grid.forEach((row) => {row.forEach((cell) => {
+    const row = cell.row
+    const col = cell.column
+    if (row > 0) cell.north = grid[row - 1][col]
+    if (row + 1 < grid.length) cell.south = grid[row + 1][col]
+    if (col > 0) cell.west = grid[row][col - 1]
+    if (col < grid[row].length) cell.east = grid[row][col + 1]
+  })})
+}
+
+Grid.prototype.randomCell = function () {
+  let row = Math.floor(Math.random()*this.rows)
+  let col = Math.floor(Math.random()*this.columns)
+  return this.grid[row][col]
+}
+
+Grid.prototype.size = function () {
+  return this.rows * this.columns
+}
+
 let state = {
   maze: [
     [0, 1, 1, 1, 0],
