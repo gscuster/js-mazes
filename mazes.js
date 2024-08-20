@@ -3,6 +3,7 @@
 function Cell (row, column) {
   this.row = row
   this.column = column
+  this.identifier = `(${row},${column})`
   this.north = null
   this.south = null
   this.east = null
@@ -14,8 +15,8 @@ function Cell (row, column) {
  * 
  * @param {Cell} cell 
  */
-Cell.prototype.link = (cell, bidi = true) => {
-  this.links[cell] = true
+Cell.prototype.link = function(cell, bidi = true) {
+  this.links[cell.identifier] = true
   if (bidi) cell.link(this, false)
 }
 
@@ -23,12 +24,12 @@ Cell.prototype.link = (cell, bidi = true) => {
  * 
  * @param {Cell} cell 
  */
-Cell.prototype.unlink = (cell, bidi=true) => {
-  this.links[cell] = false
+Cell.prototype.unlink = function(cell, bidi=true) {
+  this.links[cell.identifier] = false
   if (bidi) cell.unlink(this, false)
 }
 
-Cell.prototype.neighbors = () => {
+Cell.prototype.neighbors = function() {
   let lst = []
   if (this.north) lst.push(this.north)
   if (this.south) lst.push(this.south)
