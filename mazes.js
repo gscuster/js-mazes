@@ -100,8 +100,7 @@ let state = {
     lineWidth: 3,
     strokeStyle: '#000000'
   },
-  padding: 64,
-  showIndices: false
+  padding: 64
 }
 
 document.onreadystatechange = () => {
@@ -239,10 +238,6 @@ const setup = () => {
 
 const setupMenu = () => {
   document.getElementById('generate').onclick = generateMaze
-  const showIndicesCheckbox = document.getElementById('showindices')
-  showIndicesCheckbox.addEventListener('change', (event) => {
-    state.showIndices = event.currentTarget.checked
-  })
 }
 
 // Utility
