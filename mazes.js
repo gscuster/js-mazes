@@ -81,6 +81,11 @@ Grid.prototype.eachCell = function (fn) {
   grid.forEach((row) => { row.forEach((cell) => fn(cell)) })
 }
 
+Grid.prototype.eachRow = function (fn) {
+  let grid = this.grid
+  grid.forEach((row) => { fn(row) })
+}
+
 Grid.prototype.randomCell = function () {
   let row = Math.floor(Math.random() * this.rows)
   let col = Math.floor(Math.random() * this.columns)
@@ -231,7 +236,7 @@ const setup = () => {
   window.addEventListener("resize", () => { resizeCanvas(canvas) });
 
   setupMenu()
-  state.mazeSettings.algorithm = binaryTreeGrid
+  state.mazeSettings.algorithm = sidewinder
   generateMaze()
   run(canvas, ctx)
 }
@@ -248,7 +253,12 @@ const randInt = (a, b) => {
 
 // Algorithms
 
-const binaryTreeGrid = (grid) => {
+const algorithms = {
+  "Binary Tree": binaryTree,
+  "Sidewinder": sidewinder
+}
+
+const binaryTree = (grid) => {
   grid.eachCell((cell) => {
     let neighbors = []
     if (cell.north) neighbors.push(cell.north)
@@ -259,6 +269,29 @@ const binaryTreeGrid = (grid) => {
       const neighbor = neighbors[index]
       cell.link(neighbor)
     }
+  })
+  return grid
+}
+
+const sidewinder = (grid) => {
+  grid.eachRow((row) => {
+    let run = []
+    row.forEach((cell) => {
+      run.push(cell)
+      eastWall = !cell.east
+      northWall = !cell.north
+
+      closeOut = eastWall || (!northWall && randInt(0, 2) === 0)
+
+      if (closeOut) {
+        const idx = randInt(0, run.length)
+        member = run[idx]
+        if (member.north) member.link(member.north)
+        run = []
+      } else {
+        cell.link(cell.east)
+      }
+    })
   })
   return grid
 }
