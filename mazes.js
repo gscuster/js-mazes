@@ -1,6 +1,6 @@
 // Cell functions
 
-function Cell (row, column) {
+function Cell(column, row) {
   this.row = row
   this.column = column
   this.identifier = `(${row},${column})`
@@ -15,7 +15,7 @@ function Cell (row, column) {
  * 
  * @param {Cell} cell 
  */
-Cell.prototype.link = function(cell, bidi = true) {
+Cell.prototype.link = function (cell, bidi = true) {
   this.links[cell.identifier] = true
   if (bidi) cell.link(this, false)
 }
@@ -24,12 +24,16 @@ Cell.prototype.link = function(cell, bidi = true) {
  * 
  * @param {Cell} cell 
  */
-Cell.prototype.unlink = function(cell, bidi=true) {
+Cell.prototype.unlink = function (cell, bidi = true) {
   this.links[cell.identifier] = false
   if (bidi) cell.unlink(this, false)
 }
 
-Cell.prototype.neighbors = function() {
+Cell.prototype.linked = function (cell) {
+  return cell && this.links[cell.identifier]
+}
+
+Cell.prototype.neighbors = function () {
   let lst = []
   if (this.north) lst.push(this.north)
   if (this.south) lst.push(this.south)
@@ -40,7 +44,7 @@ Cell.prototype.neighbors = function() {
 
 // Grid functions
 
-function Grid (rows, columns) {
+function Grid(columns, rows) {
   this.rows = rows
   this.columns = columns
   this.grid = this.prepareGrid()
@@ -52,7 +56,7 @@ Grid.prototype.prepareGrid = function () {
   for (let i = 0; i < this.rows; i++) {
     grid[i] = []
     for (let j = 0; j < this.columns; j++) {
-      grid[i][j] = new Cell(i, j)
+      grid[i][j] = new Cell(j, i)
     }
   }
   return grid
@@ -60,19 +64,26 @@ Grid.prototype.prepareGrid = function () {
 
 Grid.prototype.configureCells = function () {
   let grid = this.grid
-  grid.forEach((row) => {row.forEach((cell) => {
-    const row = cell.row
-    const col = cell.column
-    if (row > 0) cell.north = grid[row - 1][col]
-    if (row + 1 < grid.length) cell.south = grid[row + 1][col]
-    if (col > 0) cell.west = grid[row][col - 1]
-    if (col < grid[row].length) cell.east = grid[row][col + 1]
-  })})
+  grid.forEach((row) => {
+    row.forEach((cell) => {
+      const row = cell.row
+      const col = cell.column
+      if (row > 0) cell.north = grid[row - 1][col]
+      if (row + 1 < grid.length) cell.south = grid[row + 1][col]
+      if (col > 0) cell.west = grid[row][col - 1]
+      if (col < grid[row].length) cell.east = grid[row][col + 1]
+    })
+  })
+}
+
+Grid.prototype.eachCell = function (fn) {
+  let grid = this.grid
+  grid.forEach((row) => { row.forEach((cell) => fn(cell)) })
 }
 
 Grid.prototype.randomCell = function () {
-  let row = Math.floor(Math.random()*this.rows)
-  let col = Math.floor(Math.random()*this.columns)
+  let row = Math.floor(Math.random() * this.rows)
+  let col = Math.floor(Math.random() * this.columns)
   return this.grid[row][col]
 }
 
@@ -81,13 +92,7 @@ Grid.prototype.size = function () {
 }
 
 let state = {
-  maze: [
-    [0, 1, 1, 1, 0],
-    [2, 1, 1, 0, 2],
-    [3, 3, 1, 0, 2],
-    [2, 0, 1, 0, 2],
-    [1, 3, 1, 3, 2]
-  ],
+  maze: null,
   mazeSettings: {
     algorithm: null,
     cellDimensions: [32, 32],
@@ -110,40 +115,46 @@ document.onreadystatechange = () => {
  * @param {CanvasRenderingContext2D} ctx 
  */
 const draw = (ctx) => {
-  drawMaze(ctx, state.mazeSettings, state.maze)
+  if (state.maze) {
+    drawmaze(ctx, state.mazeSettings, state.maze)
+  }
+}
+
+const drawLine = (ctx, x1, y1, x2, y2) => {
+  ctx.beginPath()
+  ctx.moveTo(x1, y1)
+  ctx.lineTo(x2, y2)
+  ctx.closePath()
+  ctx.stroke()
 }
 
 /**
  * 
  * @param {CanvasRenderingContext2D} ctx 
- * @param {Maze} maze 
+ * @param {*} mazeSettings 
+ * @param {Grid} maze 
  */
-const drawMaze = (ctx, mazeSettings, maze) => {
+const drawmaze = (ctx, mazeSettings, maze) => {
   ctx.lineWidth = mazeSettings.lineWidth
   ctx.strokeStyle = mazeSettings.strokeStyle
-  for (let i = 0; i < maze.length; i++) {
-    let y = mazeSettings.cellDimensions[1] * i + mazeSettings.position[1]
-    for (let j = 0; j < maze[i].length; j++) {
-      let x = mazeSettings.cellDimensions[0] * j + mazeSettings.position[0]
-      if (maze[i][j] & 1) {
-        ctx.beginPath()
-        ctx.moveTo(x, y)
-        ctx.lineTo(x + mazeSettings.cellDimensions[0], y)
-        ctx.closePath()
-        ctx.stroke()
-      }
-      if (maze[i][j] & 2) {
-        ctx.beginPath()
-        ctx.moveTo(x, y)
-        ctx.lineTo(x, y - mazeSettings.cellDimensions[1])
-        ctx.closePath()
-        ctx.stroke()
-      }
-    }
-  }
-  if (state.showIndices) {
-    drawMazeIndices(ctx, mazeSettings, maze)
-  }
+  // Draw perimeter
+  const bX = mazeSettings.position[0]
+  const bY = mazeSettings.position[1]
+  const width = mazeSettings.cellDimensions[0] * maze.columns
+  const height = mazeSettings.cellDimensions[1] * maze.rows
+  //ctx.strokeRect(bX, bY, width, height)
+
+  // Draw maze
+  maze.eachCell((cell) => {
+    const x1 = mazeSettings.cellDimensions[0] * cell.column + mazeSettings.position[0]
+    const y1 = mazeSettings.cellDimensions[1] * cell.row + mazeSettings.position[1]
+    const x2 = x1 + mazeSettings.cellDimensions[0]
+    const y2 = y1 + mazeSettings.cellDimensions[1]
+    if (!cell.north) drawLine(ctx, x1, y1, x2, y1)
+    if (!cell.west) drawLine(ctx, x1, y1, x1, y2)
+    if (!cell.linked(cell.south)) drawLine(ctx, x1, y2, x2, y2)
+    if (!cell.linked(cell.east)) drawLine(ctx, x2, y1, x2, y2)
+  })
 }
 
 /**
@@ -152,7 +163,7 @@ const drawMaze = (ctx, mazeSettings, maze) => {
  * @param {*} param1 
  * @param {*} maze 
  */
-const drawMazeIndices = (ctx, {position, cellDimensions}, maze) => {
+const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
   let x = position[0] + cellDimensions[0] / 2
   let y = position[1] + cellDimensions[1] / 2
   let nCellX = maze.length - 1
@@ -172,8 +183,7 @@ const drawMazeIndices = (ctx, {position, cellDimensions}, maze) => {
 const generateMaze = () => {
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
-  const maze = state.mazeSettings.algorithm(x, y)
-  state.maze = maze
+  state.maze = state.mazeSettings.algorithm(new Grid(x, y))
   resizeMaze(document.getElementById('gs'))
 }
 
@@ -194,15 +204,17 @@ const resizeCanvas = (canvas) => {
  * @param {HTMLCanvasElement} canvas 
  */
 const resizeMaze = (canvas) => {
-  const nX = state.maze[0].length - 1
-  const nY = state.maze.length - 1
-  const maxCellWidth = (canvas.width - 2 * state.padding) / nX
-  const maxCellHeight = (canvas.height - 2 * state.padding) / nY
-  const cellSize = Math.min(maxCellWidth, maxCellHeight)
-  const xPosition = canvas.width/2 - nX * cellSize / 2
-  const yPosition = canvas.height/2 - nY * cellSize / 2
-  state.mazeSettings.cellDimensions = [cellSize, cellSize]
-  state.mazeSettings.position = [xPosition, yPosition]
+  if (state.maze) {
+    const nX = state.maze.columns
+    const nY = state.maze.rows
+    const maxCellWidth = (canvas.width - 2 * state.padding) / nX
+    const maxCellHeight = (canvas.height - 2 * state.padding) / nY
+    const cellSize = Math.min(maxCellWidth, maxCellHeight)
+    const xPosition = canvas.width / 2 - nX * cellSize / 2
+    const yPosition = canvas.height / 2 - nY * cellSize / 2
+    state.mazeSettings.cellDimensions = [cellSize, cellSize]
+    state.mazeSettings.position = [xPosition, yPosition]
+  }
 }
 
 const run = (canvas, ctx) => {
@@ -220,7 +232,7 @@ const setup = () => {
   window.addEventListener("resize", () => { resizeCanvas(canvas) });
 
   setupMenu()
-  state.mazeSettings.algorithm = binaryTree
+  state.mazeSettings.algorithm = binaryTreeGrid
   generateMaze()
   run(canvas, ctx)
 }
@@ -233,25 +245,25 @@ const setupMenu = () => {
   })
 }
 
+// Utility
+
+const randInt = (a, b) => {
+  return Math.floor(Math.random() * (b - a)) + a
+}
+
 // Algorithms
 
-const binaryTree = (nCellsX, nCellsY) => {
-  let maze = Array(nCellsY + 1).fill().map(() => Array(nCellsX + 1).fill(0))
-  for (let i = 1; i < nCellsY + 1; i++) {
-    for (let j = 1; j < nCellsX + 1; j++) {
-      maze[i][j] = Math.ceil(Math.random()*2)
+const binaryTreeGrid = (grid) => {
+  grid.eachCell((cell) => {
+    let neighbors = []
+    if (cell.north) neighbors.push(cell.north)
+    if (cell.east) neighbors.push(cell.east)
+
+    if (neighbors.length > 0) {
+      const index = randInt(0, neighbors.length)
+      const neighbor = neighbors[index]
+      cell.link(neighbor)
     }
-  }
-  maze[0][0] = 3
-  for (let i = 0; i < nCellsY; i++) {
-    maze[i][0] |= 2
-    maze[i][nCellsX] = 2
-  }
-  for (let i = 0; i < nCellsX; i++) {
-    maze[0][i] |= 1
-    maze[nCellsY][i] = 1
-  }
-  maze[nCellsY][nCellsX] = 0
-  // Outer edge of maze
-  return maze.reverse()
+  })
+  return grid
 }
