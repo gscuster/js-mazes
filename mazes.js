@@ -1,3 +1,10 @@
+// Distance functions
+function Distances(root) {
+  this.root = root
+  this.cells = {}
+  this.cells[root.identifier] = 0
+}
+
 // Cell functions
 
 function Cell(column, row) {
@@ -16,7 +23,7 @@ function Cell(column, row) {
  * @param {Cell} cell 
  */
 Cell.prototype.link = function (cell, bidi = true) {
-  this.links[cell.identifier] = true
+  this.links[cell.identifier] = cell
   if (bidi) cell.link(this, false)
 }
 
@@ -25,7 +32,7 @@ Cell.prototype.link = function (cell, bidi = true) {
  * @param {Cell} cell 
  */
 Cell.prototype.unlink = function (cell, bidi = true) {
-  this.links[cell.identifier] = false
+  delete this.links[cell.identifier]
   if (bidi) cell.unlink(this, false)
 }
 
@@ -40,6 +47,25 @@ Cell.prototype.neighbors = function () {
   if (this.east) lst.push(this.east)
   if (this.west) lst.push(this.west)
   return lst
+}
+
+Cell.prototype.distances = function () {
+  const distances = new Distances(this)
+  let frontier = [this]
+  while (frontier.length > 0) {
+    let newFrontier = []
+    frontier.forEach((cell) => {
+      const cellDist = distances.cells[cell.identifier]
+      Object.values(cell.links).forEach((linkedCell) => {
+        if (!distances.cells[linkedCell.identifier]) {
+          distances.cells[linkedCell.identifier] = cellDist + 1
+          newFrontier.push(linkedCell)
+        }
+      })
+    })
+    frontier = newFrontier
+  }
+  return distances
 }
 
 // Grid functions
