@@ -185,6 +185,8 @@ const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
 }
 
 const generateMaze = () => {
+  const algo = document.getElementById('algorithm')
+  state.mazeSettings.algorithm = algorithms[algo.value]
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
   state.maze = state.mazeSettings.algorithm(new Grid(x, y))
@@ -236,13 +238,8 @@ const setup = () => {
   window.addEventListener("resize", () => { resizeCanvas(canvas) });
 
   setupMenu()
-  state.mazeSettings.algorithm = sidewinder
   generateMaze()
   run(canvas, ctx)
-}
-
-const setupMenu = () => {
-  document.getElementById('generate').onclick = generateMaze
 }
 
 // Utility
@@ -252,11 +249,6 @@ const randInt = (a, b) => {
 }
 
 // Algorithms
-
-const algorithms = {
-  "Binary Tree": binaryTree,
-  "Sidewinder": sidewinder
-}
 
 const binaryTree = (grid) => {
   grid.eachCell((cell) => {
@@ -294,4 +286,21 @@ const sidewinder = (grid) => {
     })
   })
   return grid
+}
+
+const algorithms = {
+  "Binary Tree": binaryTree,
+  "Sidewinder": sidewinder
+}
+
+const setupMenu = () => {
+  document.getElementById('generate').onclick = generateMaze
+
+  const algoSelect = document.getElementById('algorithm')
+  for (const [key, value] of Object.entries(algorithms)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.innerHTML = key
+    algoSelect.appendChild(opt)
+  }
 }
