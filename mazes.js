@@ -5,6 +5,19 @@ function Distances(root) {
   this.cells[root.identifier] = 0
 }
 
+Distances.prototype.max = function() {
+  let maxDistance = 0
+  let maxCell = this.root
+
+  for (const [key, value] of Object.entries(this.cells)) {
+    if (value > maxDistance) {
+      maxDistance = value
+      maxCell = key
+    }
+  }
+  return [maxCell, maxDistance]
+}
+
 // Cell functions
 
 function Cell(column, row) {
@@ -16,6 +29,7 @@ function Cell(column, row) {
   this.east = null
   this.west = null
   this.links = {}
+  this.color = '#ffffff'
 }
 
 /**
@@ -51,13 +65,21 @@ Cell.prototype.neighbors = function () {
 
 Cell.prototype.distances = function () {
   const distances = new Distances(this)
+  console.log(distances)
   let frontier = [this]
   while (frontier.length > 0) {
     let newFrontier = []
     frontier.forEach((cell) => {
       const cellDist = distances.cells[cell.identifier]
       Object.values(cell.links).forEach((linkedCell) => {
-        if (!distances.cells[linkedCell.identifier]) {
+        if (distances.cells[linkedCell.identifier] == null) {
+          if (linkedCell.identifier === '(0,0)') {
+            console.log('Something is wrong')
+            console.log(cell)
+            console.log(cellDist)
+            console.log(linkedCell)
+            console.log(distances.cells[linkedCell.identifier])
+          }
           distances.cells[linkedCell.identifier] = cellDist + 1
           newFrontier.push(linkedCell)
         }
@@ -75,6 +97,7 @@ function Grid(columns, rows) {
   this.columns = columns
   this.grid = this.prepareGrid()
   this.configureCells()
+  this.distances = null
 }
 
 Grid.prototype.prepareGrid = function () {
@@ -122,6 +145,10 @@ Grid.prototype.size = function () {
   return this.rows * this.columns
 }
 
+Grid.prototype.updateDistances = function () {
+  this.distances = this.grid[0][0].distances()
+}
+
 let state = {
   maze: null,
   mazeSettings: {
@@ -129,7 +156,10 @@ let state = {
     cellDimensions: [32, 32],
     position: [64, 64],
     lineWidth: 3,
-    strokeStyle: '#000000'
+    strokeStyle: '#000000',
+    distanceOn: true,
+    distanceColors: ['#FFFFFF', '#730071'],
+    distanceRes: 1024
   },
   padding: 64
 }
@@ -146,7 +176,7 @@ document.onreadystatechange = () => {
  */
 const draw = (ctx) => {
   if (state.maze) {
-    drawmaze(ctx, state.mazeSettings, state.maze)
+    drawMaze(ctx, state.mazeSettings, state.maze)
   }
 }
 
@@ -161,25 +191,40 @@ const drawLine = (ctx, x1, y1, x2, y2) => {
 /**
  * 
  * @param {CanvasRenderingContext2D} ctx 
- * @param {*} mazeSettings 
+ * @param {*} settings 
  * @param {Grid} maze 
  */
-const drawmaze = (ctx, mazeSettings, maze) => {
-  ctx.lineWidth = mazeSettings.lineWidth
-  ctx.strokeStyle = mazeSettings.strokeStyle
+const drawMaze = (ctx, settings, maze) => {
+  ctx.lineWidth = settings.lineWidth
+  ctx.strokeStyle = settings.strokeStyle
   // Draw perimeter
-  const bX = mazeSettings.position[0]
-  const bY = mazeSettings.position[1]
-  const width = mazeSettings.cellDimensions[0] * maze.columns
-  const height = mazeSettings.cellDimensions[1] * maze.rows
-  //ctx.strokeRect(bX, bY, width, height)
+  const bX = settings.position[0]
+  const bY = settings.position[1]
+  const width = settings.cellDimensions[0] * maze.columns
+  const height = settings.cellDimensions[1] * maze.rows
+  
+  // Draw color first if present
+  if (settings.distanceOn && maze.distances) {
+    maze.eachCell((cell) => {
+      const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
+      const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
+
+      ctx.fillStyle = cell.color
+      ctx.fillRect(
+        x1,
+        y1,
+        settings.cellDimensions[0] + 0.5,
+        settings.cellDimensions[1] + 0.5
+      )
+    })
+  }
 
   // Draw maze
   maze.eachCell((cell) => {
-    const x1 = mazeSettings.cellDimensions[0] * cell.column + mazeSettings.position[0]
-    const y1 = mazeSettings.cellDimensions[1] * cell.row + mazeSettings.position[1]
-    const x2 = x1 + mazeSettings.cellDimensions[0]
-    const y2 = y1 + mazeSettings.cellDimensions[1]
+    const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
+    const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
+    const x2 = x1 + settings.cellDimensions[0]
+    const y2 = y1 + settings.cellDimensions[1]
     if (!cell.north) drawLine(ctx, x1, y1, x2, y1)
     if (!cell.west) drawLine(ctx, x1, y1, x1, y2)
     if (!cell.linked(cell.south)) drawLine(ctx, x1, y2, x2, y2)
@@ -210,12 +255,34 @@ const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
   }
 }
 
+const updateColors = () => {
+  console.log('updating color')
+  const maze = state.maze
+  const settings = state.mazeSettings
+  if (maze && maze.distances) {
+    const minColor = [255,255,255]
+    const maxColor = hexToRGB(document.getElementById('color').value)
+    const colorInc = colorIncrements(minColor, maxColor, settings.distanceRes)
+    const distFactor = settings.distanceRes / maze.distances.max()[1]
+
+    maze.eachCell((cell) => {
+      const distIndex = Math.floor(maze.distances.cells[cell.identifier] * distFactor)
+      const rgbOffset = colorInc.map((val) => val * distIndex)
+      const cellColor = arrayAdd(rgbOffset, minColor).map(Math.floor)
+
+      cell.color = rgbToHex(cellColor)
+    })
+  }
+}
+
 const generateMaze = () => {
   const algo = document.getElementById('algorithm')
   state.mazeSettings.algorithm = algorithms[algo.value]
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
   state.maze = state.mazeSettings.algorithm(new Grid(x, y))
+  state.maze.updateDistances()
+  updateColors()
   resizeMaze(document.getElementById('gs'))
 }
 
@@ -270,17 +337,35 @@ const setup = () => {
 
 // Utility
 
+const arrayAdd = (arr1, arr2) => {
+  if (arr1.length === arr2.length) {
+    result = []
+    for (let i = 0; i < arr1.length; i++) {
+      result.push(arr1[i] + arr2[i])
+    }
+    return result
+  }
+}
+
 const randInt = (a, b) => {
   return Math.floor(Math.random() * (b - a)) + a
 }
 
 const hexToRGB = (hex) => {
-  const [_, r, g, b] = hex.match(/#([a-zA-Z]{2})([a-zA-Z]{2})([a-zA-Z]{2})/)
+  const [_, r, g, b] = hex.match(/#([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})/)
   return [r, g, b].map((val) => parseInt(val, 16))
 }
 
 const rgbToHex = (rgbColor) => {
-  return '#' + rgbColor.map((val) => val.toString(16)).join('')
+  return '#' + rgbColor.map((val) => val.toString(16).padStart(2, '0')).join('')
+}
+
+const colorIncrements = (rgb1, rgb2, resolution) => {
+  let increment = []
+  for (let i = 0; i < 3; i++) {
+    increment.push((rgb2[i] - rgb1[i]) / resolution)
+  }
+  return increment
 }
 
 // Algorithms
@@ -330,6 +415,8 @@ const algorithms = {
 
 const setupMenu = () => {
   document.getElementById('generate').onclick = generateMaze
+
+  document.getElementById('color').oninput = updateColors
 
   const algoSelect = document.getElementById('algorithm')
   for (const [key, value] of Object.entries(algorithms)) {
