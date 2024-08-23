@@ -111,6 +111,7 @@ function Grid(columns, rows) {
   this.rows = rows
   this.columns = columns
   this.grid = this.prepareGrid()
+  this.gridIdentifiers = {}
   this.configureCells()
   this.distances = null
 }
@@ -136,6 +137,9 @@ Grid.prototype.configureCells = function () {
       if (row + 1 < grid.length) cell.south = grid[row + 1][col]
       if (col > 0) cell.west = grid[row][col - 1]
       if (col < grid[row].length) cell.east = grid[row][col + 1]
+
+      // Map cell to identifier for easier lookup
+      this.gridIdentifiers[cell.identifier] = cell
     })
   })
 }
@@ -162,6 +166,8 @@ Grid.prototype.size = function () {
 
 Grid.prototype.updateDistances = function () {
   this.distances = this.grid[0][0].distances()
+  const [maxCellIdentifier, _] = this.distances.max()
+  this.distances = this.gridIdentifiers[maxCellIdentifier].distances()
 }
 
 Grid.prototype.updateColors = function (settings) {
