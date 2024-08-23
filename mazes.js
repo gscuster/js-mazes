@@ -80,7 +80,6 @@ Cell.prototype.neighbors = function () {
 
 Cell.prototype.distances = function () {
   const distances = new Distances(this)
-  console.log(distances)
   let frontier = [this]
   while (frontier.length > 0) {
     let newFrontier = []
@@ -88,13 +87,6 @@ Cell.prototype.distances = function () {
       const cellDist = distances.cells[cell.identifier]
       Object.values(cell.links).forEach((linkedCell) => {
         if (distances.cells[linkedCell.identifier] == null) {
-          if (linkedCell.identifier === '(0,0)') {
-            console.log('Something is wrong')
-            console.log(cell)
-            console.log(cellDist)
-            console.log(linkedCell)
-            console.log(distances.cells[linkedCell.identifier])
-          }
           distances.cells[linkedCell.identifier] = cellDist + 1
           newFrontier.push(linkedCell)
         }
@@ -375,6 +367,17 @@ const randInt = (a, b) => {
   return Math.floor(Math.random() * (b - a)) + a
 }
 
+const sample = (arr) => {
+  if (arr.length > 0) {
+    const idx = randInt(0, arr.length)
+    return arr[idx]
+  }
+}
+
+const sampleValues = (obj) => {
+  return sample(Object.values(obj))
+}
+
 const hexToRGB = (hex) => {
   const [_, r, g, b] = hex.match(/#([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})/)
   return [r, g, b].map((val) => parseInt(val, 16))
@@ -432,9 +435,54 @@ const sidewinder = (grid) => {
   return grid
 }
 
+const aldousBroder = (grid) => {
+  let cell = grid.randomCell()
+  let unvisited = grid.size() - 1
+  while (unvisited > 0) {
+    const neighbor = sample(cell.neighbors())
+    if (Object.keys(neighbor.links).length === 0) {
+      cell.link(neighbor)
+      unvisited -= 1
+    }
+    cell = neighbor
+  }
+  return grid
+}
+
+const wilson = (grid) => {
+  const unvisited = {}
+  grid.eachCell((cell) => unvisited[cell.identifier] = cell)
+
+  first = sampleValues(unvisited)
+  delete unvisited[first.identifier]
+
+  while (Object.keys(unvisited).length > 0) {
+    let cell = sampleValues(unvisited)
+    let path = [cell]
+    while (unvisited[cell.identifier]) {
+      cell = sample(cell.neighbors())
+      const position = path.indexOf(cell)
+      if (position >= 0) {
+        path = path.slice(0, position+1)
+      } else {
+        path.push(cell)
+      }
+    }
+
+    for (var i = 0; i < path.length-1; i++) {
+      path[i].link(path[i + 1])
+      delete unvisited[path[i].identifier]
+    }
+  }
+  
+  return grid
+}
+
 const algorithms = {
   "Binary Tree": binaryTree,
-  "Sidewinder": sidewinder
+  "Sidewinder": sidewinder,
+  "Aldous-Broder": aldousBroder,
+  "Wilson": wilson
 }
 
 const setupMenu = () => {
