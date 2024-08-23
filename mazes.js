@@ -149,6 +149,23 @@ Grid.prototype.updateDistances = function () {
   this.distances = this.grid[0][0].distances()
 }
 
+Grid.prototype.updateColors = function (settings) {
+  if (this.distances) {
+    const minColor = [255,255,255]
+    const maxColor = hexToRGB(document.getElementById('color').value)
+    const colorInc = colorIncrements(minColor, maxColor, settings.distanceRes)
+    const distFactor = settings.distanceRes / this.distances.max()[1]
+
+    this.eachCell((cell) => {
+      const distIndex = Math.floor(this.distances.cells[cell.identifier] * distFactor)
+      const rgbOffset = colorInc.map((val) => val * distIndex)
+      const cellColor = arrayAdd(rgbOffset, minColor).map(Math.floor)
+
+      cell.color = rgbToHex(cellColor)
+    })
+  }
+}
+
 let state = {
   maze: null,
   mazeSettings: {
@@ -256,22 +273,8 @@ const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
 }
 
 const updateColors = () => {
-  console.log('updating color')
-  const maze = state.maze
-  const settings = state.mazeSettings
-  if (maze && maze.distances) {
-    const minColor = [255,255,255]
-    const maxColor = hexToRGB(document.getElementById('color').value)
-    const colorInc = colorIncrements(minColor, maxColor, settings.distanceRes)
-    const distFactor = settings.distanceRes / maze.distances.max()[1]
-
-    maze.eachCell((cell) => {
-      const distIndex = Math.floor(maze.distances.cells[cell.identifier] * distFactor)
-      const rgbOffset = colorInc.map((val) => val * distIndex)
-      const cellColor = arrayAdd(rgbOffset, minColor).map(Math.floor)
-
-      cell.color = rgbToHex(cellColor)
-    })
+  if (state.maze && state.maze.distances) {
+    state.maze.updateColors(state.mazeSettings)
   }
 }
 
