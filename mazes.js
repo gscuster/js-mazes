@@ -274,6 +274,15 @@ const randInt = (a, b) => {
   return Math.floor(Math.random() * (b - a)) + a
 }
 
+const hexToRGB = (hex) => {
+  const [_, r, g, b] = hex.match(/#([a-zA-Z]{2})([a-zA-Z]{2})([a-zA-Z]{2})/)
+  return [r, g, b].map((val) => parseInt(val, 16))
+}
+
+const rgbToHex = (rgbColor) => {
+  return '#' + rgbColor.map((val) => val.toString(16)).join('')
+}
+
 // Algorithms
 
 const binaryTree = (grid) => {
