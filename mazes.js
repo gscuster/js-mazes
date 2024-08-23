@@ -5,7 +5,7 @@ function Distances(root) {
   this.cells[root.identifier] = 0
 }
 
-Distances.prototype.max = function() {
+Distances.prototype.max = function () {
   let maxDistance = 0
   let maxCell = this.root
 
@@ -16,6 +16,21 @@ Distances.prototype.max = function() {
     }
   }
   return [maxCell, maxDistance]
+}
+
+Distances.prototype.shortestPath = function (goal) {
+  let current = goal
+  breadcrumbs = new Distances(this.root)
+  breadcrumbs.cells[current.identifier] = this.cells[current.identifier]
+  while (current != this.root) {
+    Object.values(current.links).forEach((neighbor) => {
+      if (this.cells[neighbor.identifier] < this.cells[current.identifier]) {
+        breadcrumbs.cells[neighbor.identifier] = this.cells[neighbor.identifier]
+        current = neighbor
+      }
+    })
+  }
+  return breadcrumbs
 }
 
 // Cell functions
@@ -151,7 +166,7 @@ Grid.prototype.updateDistances = function () {
 
 Grid.prototype.updateColors = function (settings) {
   if (this.distances) {
-    const minColor = [255,255,255]
+    const minColor = [255, 255, 255]
     const maxColor = hexToRGB(document.getElementById('color').value)
     const colorInc = colorIncrements(minColor, maxColor, settings.distanceRes)
     const distFactor = settings.distanceRes / this.distances.max()[1]
@@ -219,7 +234,7 @@ const drawMaze = (ctx, settings, maze) => {
   const bY = settings.position[1]
   const width = settings.cellDimensions[0] * maze.columns
   const height = settings.cellDimensions[1] * maze.rows
-  
+
   // Draw color first if present
   if (settings.distanceOn && maze.distances) {
     maze.eachCell((cell) => {
