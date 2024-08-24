@@ -519,6 +519,22 @@ const huntKill = (grid) => {
 }
 
 const recursiveBacktracker = (grid) => {
+  const startAt = grid.randomCell()
+  const stack = [startAt]
+
+  while (stack.length > 0) {
+    const current = stack[stack.length - 1]
+    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
+      return Object.keys(neighbor.links).length === 0
+    })
+    if (unvisitedNeighbors.length === 0) {
+      stack.pop()
+    } else {
+      const neighbor = sample(unvisitedNeighbors)
+      current.link(neighbor)
+      stack.push(neighbor)
+    }
+  }
   return grid
 }
 
