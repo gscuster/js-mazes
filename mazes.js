@@ -185,7 +185,7 @@ let state = {
     algorithm: null,
     cellDimensions: [32, 32],
     position: [64, 64],
-    lineWidth: 3,
+    lineWidth: 1,
     strokeStyle: '#000000',
     distanceOn: true,
     distanceColors: ['#FFFFFF', '#730071'],
@@ -474,7 +474,43 @@ const wilson = (grid) => {
       delete unvisited[path[i].identifier]
     }
   }
-  
+
+  return grid
+}
+
+const huntKill = (grid) => {
+  let current = grid.randomCell()
+  while (current) {
+    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
+      return Object.keys(neighbor.links).length === 0
+    })
+
+    if (unvisitedNeighbors.length > 0) {
+      const neighbor = sample(unvisitedNeighbors)
+      current.link(neighbor)
+      current = neighbor
+    } else {
+      current = null
+
+      // Need a loop through cells we can break, grid.eachCell won't work
+      for (let i = 0, j = 0; i < grid.rows; (j === grid.columns - 1) ? [i++, j=0] : j++) {
+        const cell = grid.grid[i][j]
+        const visitedNeighbors = cell.neighbors().filter((neighbor) => {
+          return Object.keys(neighbor.links).length > 0
+        })
+        if (Object.keys(cell.links).length === 0 && visitedNeighbors.length > 0) {
+          current = cell
+          const neighbor = sample(visitedNeighbors)
+          current.link(neighbor)
+          break
+        }
+      }
+    }
+  }
+  return grid
+}
+
+const recursiveBacktracker = (grid) => {
   return grid
 }
 
@@ -482,7 +518,9 @@ const algorithms = {
   "Binary Tree": binaryTree,
   "Sidewinder": sidewinder,
   "Aldous-Broder": aldousBroder,
-  "Wilson": wilson
+  "Wilson": wilson,
+  "Hunt and Kill": huntKill,
+  "Recursive Backtracker": recursiveBacktracker
 }
 
 const setupMenu = () => {
