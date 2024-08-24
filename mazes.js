@@ -179,6 +179,14 @@ Grid.prototype.updateColors = function (settings) {
   }
 }
 
+Grid.prototype.deadEnds = function () {
+  const result = []
+  this.eachCell((cell) => {
+    if (Object.keys(cell.links).length === 1) result.push(cell)
+  })
+  return result
+}
+
 let state = {
   maze: null,
   mazeSettings: {
