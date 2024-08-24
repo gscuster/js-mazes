@@ -5,12 +5,12 @@ function Distances(root) {
   this.cells[root.identifier] = 0
 }
 
-Distances.prototype.max = function () {
+Distances.prototype.max = function (subset = null) {
   let maxDistance = 0
-  let maxCell = this.root
+  let maxCell = this.root.identifier
 
   for (const [key, value] of Object.entries(this.cells)) {
-    if (value > maxDistance) {
+    if (value > maxDistance && (!subset || subset.includes(key))) {
       maxDistance = value
       maxCell = key
     }
@@ -44,6 +44,8 @@ function Cell(column, row) {
   this.east = null
   this.west = null
   this.links = {}
+  this.openings = {}
+  this.neighbors = []
   this.color = '#ffffff'
 }
 
@@ -69,13 +71,22 @@ Cell.prototype.linked = function (cell) {
   return cell && this.links[cell.identifier]
 }
 
-Cell.prototype.neighbors = function () {
-  let lst = []
+Cell.prototype.updateNeighbors = function () {
+  const lst = []
   if (this.north) lst.push(this.north)
   if (this.south) lst.push(this.south)
   if (this.east) lst.push(this.east)
   if (this.west) lst.push(this.west)
-  return lst
+  this.neighbors = lst
+}
+
+Cell.prototype.borders = function () {
+  const borders = []
+  if (!this.north) borders.push('north')
+  if (!this.south) borders.push('south')
+  if (!this.east) borders.push('east')
+  if (!this.west) borders.push('west')
+  return borders
 }
 
 Cell.prototype.distances = function () {
@@ -97,6 +108,14 @@ Cell.prototype.distances = function () {
   return distances
 }
 
+/**
+ * Create a dummy link 
+ */
+Cell.prototype.openEdge = function () {
+  const border = sample(this.borders())
+  this.openings[border] = true
+}
+
 // Grid functions
 
 function Grid(columns, rows) {
@@ -105,6 +124,7 @@ function Grid(columns, rows) {
   this.grid = this.prepareGrid()
   this.gridIdentifiers = {}
   this.configureCells()
+  this.edges = this.findEdges()
   this.distances = null
 }
 
@@ -129,6 +149,7 @@ Grid.prototype.configureCells = function () {
       if (row + 1 < grid.length) cell.south = grid[row + 1][col]
       if (col > 0) cell.west = grid[row][col - 1]
       if (col < grid[row].length) cell.east = grid[row][col + 1]
+      cell.updateNeighbors()
 
       // Map cell to identifier for easier lookup
       this.gridIdentifiers[cell.identifier] = cell
@@ -160,6 +181,14 @@ Grid.prototype.updateDistances = function () {
   this.distances = this.grid[0][0].distances()
   const [maxCellIdentifier, _] = this.distances.max()
   this.distances = this.gridIdentifiers[maxCellIdentifier].distances()
+}
+
+Grid.prototype.findEdges = function () {
+  const edges = []
+  this.eachCell((cell) => {
+    if (cell.neighbors.length < 4) edges.push(cell)
+  })
+  return edges
 }
 
 Grid.prototype.updateColors = function (settings) {
@@ -263,10 +292,10 @@ const drawMaze = (ctx, settings, maze) => {
     const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
     const x2 = x1 + settings.cellDimensions[0]
     const y2 = y1 + settings.cellDimensions[1]
-    if (!cell.north) drawLine(ctx, x1, y1, x2, y1)
-    if (!cell.west) drawLine(ctx, x1, y1, x1, y2)
-    if (!cell.linked(cell.south)) drawLine(ctx, x1, y2, x2, y2)
-    if (!cell.linked(cell.east)) drawLine(ctx, x2, y1, x2, y2)
+    if (!cell.north && !cell.openings.north) drawLine(ctx, x1, y1, x2, y1)
+    if (!cell.west && !cell.openings.west) drawLine(ctx, x1, y1, x1, y2)
+    if (!cell.linked(cell.south) && !cell.openings.south) drawLine(ctx, x1, y2, x2, y2)
+    if (!cell.linked(cell.east) && !cell.openings.east) drawLine(ctx, x2, y1, x2, y2)
   })
 }
 
@@ -296,6 +325,21 @@ const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
 const updateColors = () => {
   if (state.maze && state.maze.distances) {
     state.maze.updateColors(state.mazeSettings)
+  }
+}
+
+const openMaze = () => {
+  if (state.maze) {
+    // get distances on edge
+    let edgeDistances = state.maze.edges[0].distances()
+    const edgeIds = state.maze.edges.map((cell) => cell.identifier)
+    const [cellIdentifier, _] = edgeDistances.max(edgeIds)
+    const startCell = state.maze.gridIdentifiers[cellIdentifier]
+    const endCellId = startCell.distances().max(edgeIds)[0]
+    const endCell = state.maze.gridIdentifiers[endCellId]
+
+    startCell.openEdge()
+    endCell.openEdge()
   }
 }
 
@@ -447,7 +491,7 @@ const aldousBroder = (grid) => {
   let cell = grid.randomCell()
   let unvisited = grid.size() - 1
   while (unvisited > 0) {
-    const neighbor = sample(cell.neighbors())
+    const neighbor = sample(cell.neighbors)
     if (Object.keys(neighbor.links).length === 0) {
       cell.link(neighbor)
       unvisited -= 1
@@ -468,7 +512,7 @@ const wilson = (grid) => {
     let cell = sampleValues(unvisited)
     let path = [cell]
     while (unvisited[cell.identifier]) {
-      cell = sample(cell.neighbors())
+      cell = sample(cell.neighbors)
       const position = path.indexOf(cell)
       if (position >= 0) {
         path = path.slice(0, position+1)
@@ -489,7 +533,7 @@ const wilson = (grid) => {
 const huntKill = (grid) => {
   let current = grid.randomCell()
   while (current) {
-    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
+    const unvisitedNeighbors = current.neighbors.filter((neighbor) => {
       return Object.keys(neighbor.links).length === 0
     })
 
@@ -503,7 +547,7 @@ const huntKill = (grid) => {
       // Need a loop through cells we can break, grid.eachCell won't work
       for (let i = 0, j = 0; i < grid.rows; (j === grid.columns - 1) ? [i++, j=0] : j++) {
         const cell = grid.grid[i][j]
-        const visitedNeighbors = cell.neighbors().filter((neighbor) => {
+        const visitedNeighbors = cell.neighbors.filter((neighbor) => {
           return Object.keys(neighbor.links).length > 0
         })
         if (Object.keys(cell.links).length === 0 && visitedNeighbors.length > 0) {
@@ -524,7 +568,7 @@ const recursiveBacktracker = (grid) => {
 
   while (stack.length > 0) {
     const current = stack[stack.length - 1]
-    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
+    const unvisitedNeighbors = current.neighbors.filter((neighbor) => {
       return Object.keys(neighbor.links).length === 0
     })
     if (unvisitedNeighbors.length === 0) {
@@ -539,16 +583,18 @@ const recursiveBacktracker = (grid) => {
 }
 
 const algorithms = {
+  "Recursive Backtracker": recursiveBacktracker,
+  "Aldous-Broder": aldousBroder,
+  "Hunt and Kill": huntKill,
   "Binary Tree": binaryTree,
   "Sidewinder": sidewinder,
-  "Aldous-Broder": aldousBroder,
   "Wilson": wilson,
-  "Hunt and Kill": huntKill,
-  "Recursive Backtracker": recursiveBacktracker
 }
 
 const setupMenu = () => {
   document.getElementById('generate').onclick = generateMaze
+
+  document.getElementById('openings').onclick = openMaze
 
   document.getElementById('color').oninput = updateColors
 
