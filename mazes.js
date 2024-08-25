@@ -128,6 +128,10 @@ function Grid(columns, rows) {
   this.distances = null
 }
 
+Grid.prototype.getCell = function (row, col) {
+  return this.grid[row] && this.grid[row][col]
+}
+
 Grid.prototype.prepareGrid = function () {
   let grid = []
   for (let i = 0; i < this.rows; i++) {
@@ -170,7 +174,7 @@ Grid.prototype.eachRow = function (fn) {
 Grid.prototype.randomCell = function () {
   let row = Math.floor(Math.random() * this.rows)
   let col = Math.floor(Math.random() * this.columns)
-  return this.grid[row][col]
+  return this.getCell(row, col)
 }
 
 Grid.prototype.size = function () {
@@ -178,7 +182,7 @@ Grid.prototype.size = function () {
 }
 
 Grid.prototype.updateDistances = function () {
-  this.distances = this.grid[0][0].distances()
+  this.distances = this.getCell(0, 0).distances()
   const [maxCellIdentifier, _] = this.distances.max()
   this.distances = this.gridIdentifiers[maxCellIdentifier].distances()
 }
@@ -216,13 +220,101 @@ Grid.prototype.deadEnds = function () {
   return result
 }
 
+// Circular grid functions
+
+function PolarCell(column, row) {
+  Cell.call(this, column, row)
+  this.ccw  = null
+  this.cw = null
+  this.inward = null
+  this.outward = []
+}
+PolarCell.prototype = Object.create(Cell.prototype);
+PolarCell.prototype.constructor = PolarCell;
+
+PolarCell.prototype.updateNeighbors = function () {
+  const lst = []
+  if (this.ccw) lst.push(this.ccw)
+  if (this.cw) lst.push(this.cw)
+  if (this.inward) lst.push(this.inward)
+  lst.concat(this.outward)
+  this.neighbors = lst.concat(this.outward)
+}
+
+PolarCell.prototype.borders = function () {
+  const borders = []
+  if (this.outward.length === 0) borders.push('outward')
+  return borders
+}
+
+function PolarGrid(rows) {
+  Grid.call(this, 1, rows)
+}
+
+PolarGrid.prototype = Object.create(Grid.prototype);
+PolarGrid.prototype.constructor = PolarGrid;
+
+PolarGrid.prototype.getCell = function (row, col) {
+  if (!this.grid[row]) {
+    return null
+  } else if (col > this.grid[row].length) {
+    return this.grid[row][col % this.grid[row].length]
+  } else if (col < 0) {
+    return this.grid[row][mod(col, this.grid[row].length)]
+  }
+  return this.grid[row][col]
+}
+
+PolarGrid.prototype.prepareGrid = function () {
+  const rowHeight = 1.0 / this.rows
+  const grid = [[new PolarCell(0, 0)]]
+  for (let i = 1; i < this.rows; i++) {
+    const radius = i / this.rows
+    const circumference = 2 * Math.PI * radius
+
+    const previousCount = grid[i-1].length
+    const estimatedWidth = circumference / previousCount
+    const ratio = Math.round(estimatedWidth / rowHeight)
+    const nCells = previousCount * ratio
+
+    grid[i] = []
+    for (let j = 0; j < nCells; j++) {
+      grid[i].push(new PolarCell(j, i))
+    }
+  }
+  return grid
+}
+
+PolarGrid.prototype.configureCells = function () {
+  this.eachCell((cell) => {
+    const row = cell.row
+    const col = cell.column
+    if (row > 0) {
+      cell.cw = this.getCell(row, col+1)
+      cell.ccw = this.getCell(row, col-1)
+      ratio = this.grid[row].length / this.grid[row-1].length
+      parent = this.getCell(row-1, Math.trunc(col / ratio))
+      parent.outward.push(cell)
+      cell.inward = parent
+    }
+
+    // Map cell to identifier for easier lookup
+    this.gridIdentifiers[cell.identifier] = cell
+  })
+  this.eachCell((cell) => cell.updateNeighbors())
+}
+
+PolarGrid.prototype.findEdges = function () {
+
+}
+
 let state = {
   maze: null,
   mazeSettings: {
     algorithm: null,
     cellDimensions: [32, 32],
     position: [64, 64],
-    lineWidth: 1,
+    lineWidth: 3,
     strokeStyle: '#000000',
     distanceOn: true,
     distanceColors: ['#FFFFFF', '#730071'],
@@ -430,6 +522,10 @@ const sampleValues = (obj) => {
   return sample(Object.values(obj))
 }
 
+const mod = (n, m) => {
+  return ((n % m) + m) % m
+}
+
 const hexToRGB = (hex) => {
   const [_, r, g, b] = hex.match(/#([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})([0-9a-zA-Z]{2})/)
   return [r, g, b].map((val) => parseInt(val, 16))
@@ -546,7 +642,7 @@ const huntKill = (grid) => {
 
       // Need a loop through cells we can break, grid.eachCell won't work
       for (let i = 0, j = 0; i < grid.rows; (j === grid.columns - 1) ? [i++, j=0] : j++) {
-        const cell = grid.grid[i][j]
+        const cell = grid.getCell[i][j]
         const visitedNeighbors = cell.neighbors.filter((neighbor) => {
           return Object.keys(neighbor.links).length > 0
         })
