@@ -220,6 +220,44 @@ Grid.prototype.deadEnds = function () {
   return result
 }
 
+Grid.prototype.drawMaze = function (ctx, settings) {
+  ctx.lineWidth = settings.lineWidth
+  ctx.strokeStyle = settings.strokeStyle
+  // Draw perimeter
+  const bX = settings.position[0]
+  const bY = settings.position[1]
+  const width = settings.cellDimensions[0] * this.columns
+  const height = settings.cellDimensions[1] * this.rows
+
+  // Draw color first if present
+  if (settings.distanceOn && this.distances) {
+    this.eachCell((cell) => {
+      const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
+      const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
+
+      ctx.fillStyle = cell.color
+      ctx.fillRect(
+        x1,
+        y1,
+        settings.cellDimensions[0] + 0.5,
+        settings.cellDimensions[1] + 0.5
+      )
+    })
+  }
+
+  // Draw maze
+  this.eachCell((cell) => {
+    const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
+    const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
+    const x2 = x1 + settings.cellDimensions[0]
+    const y2 = y1 + settings.cellDimensions[1]
+    if (!cell.north && !cell.openings.north) drawLine(ctx, x1, y1, x2, y1)
+    if (!cell.west && !cell.openings.west) drawLine(ctx, x1, y1, x1, y2)
+    if (!cell.linked(cell.south) && !cell.openings.south) drawLine(ctx, x1, y2, x2, y2)
+    if (!cell.linked(cell.east) && !cell.openings.east) drawLine(ctx, x2, y1, x2, y2)
+  })
+}
+
 // Circular grid functions
 
 function PolarCell(column, row) {
@@ -335,7 +373,7 @@ document.onreadystatechange = () => {
  */
 const draw = (ctx) => {
   if (state.maze) {
-    drawMaze(ctx, state.mazeSettings, state.maze)
+    state.maze.drawMaze(ctx, state.mazeSettings)
   }
 }
 
@@ -345,50 +383,6 @@ const drawLine = (ctx, x1, y1, x2, y2) => {
   ctx.lineTo(x2, y2)
   ctx.closePath()
   ctx.stroke()
-}
-
-/**
- * 
- * @param {CanvasRenderingContext2D} ctx 
- * @param {*} settings 
- * @param {Grid} maze 
- */
-const drawMaze = (ctx, settings, maze) => {
-  ctx.lineWidth = settings.lineWidth
-  ctx.strokeStyle = settings.strokeStyle
-  // Draw perimeter
-  const bX = settings.position[0]
-  const bY = settings.position[1]
-  const width = settings.cellDimensions[0] * maze.columns
-  const height = settings.cellDimensions[1] * maze.rows
-
-  // Draw color first if present
-  if (settings.distanceOn && maze.distances) {
-    maze.eachCell((cell) => {
-      const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
-      const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
-
-      ctx.fillStyle = cell.color
-      ctx.fillRect(
-        x1,
-        y1,
-        settings.cellDimensions[0] + 0.5,
-        settings.cellDimensions[1] + 0.5
-      )
-    })
-  }
-
-  // Draw maze
-  maze.eachCell((cell) => {
-    const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
-    const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
-    const x2 = x1 + settings.cellDimensions[0]
-    const y2 = y1 + settings.cellDimensions[1]
-    if (!cell.north && !cell.openings.north) drawLine(ctx, x1, y1, x2, y1)
-    if (!cell.west && !cell.openings.west) drawLine(ctx, x1, y1, x1, y2)
-    if (!cell.linked(cell.south) && !cell.openings.south) drawLine(ctx, x1, y2, x2, y2)
-    if (!cell.linked(cell.east) && !cell.openings.east) drawLine(ctx, x2, y1, x2, y2)
-  })
 }
 
 /**
