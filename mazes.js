@@ -108,9 +108,6 @@ Cell.prototype.distances = function () {
   return distances
 }
 
-/**
- * Create a dummy link 
- */
 Cell.prototype.openEdge = function () {
   const border = sample(this.borders())
   this.openings[border] = true
@@ -223,11 +220,6 @@ Grid.prototype.deadEnds = function () {
 Grid.prototype.drawMaze = function (ctx, settings) {
   ctx.lineWidth = settings.lineWidth
   ctx.strokeStyle = settings.strokeStyle
-  // Draw perimeter
-  const bX = settings.position[0]
-  const bY = settings.position[1]
-  const width = settings.cellDimensions[0] * this.columns
-  const height = settings.cellDimensions[1] * this.rows
 
   // Draw color first if present
   if (settings.distanceOn && this.distances) {
@@ -258,6 +250,34 @@ Grid.prototype.drawMaze = function (ctx, settings) {
   })
 }
 
+/**
+ * Updates parameters for the maze.
+ */
+Grid.prototype.resizeMaze = function(width, height, settings) {
+  const nX = state.maze.columns
+  const nY = state.maze.rows
+  const maxCellWidth = (width - 2 * state.padding) / nX
+  const maxCellHeight = (height - 2 * state.padding) / nY
+  const cellSize = Math.min(maxCellWidth, maxCellHeight)
+  const xPosition = width / 2 - nX * cellSize / 2
+  const yPosition = height / 2 - nY * cellSize / 2
+  settings.cellDimensions = [cellSize, cellSize]
+  settings.position = [xPosition, yPosition]
+}
+
+Grid.prototype.openMaze = function() {
+  // get distances on edge
+  let edgeDistances = this.edges[0].distances()
+  const edgeIds = this.edges.map((cell) => cell.identifier)
+  const [cellIdentifier, _] = edgeDistances.max(edgeIds)
+  const startCell = this.gridIdentifiers[cellIdentifier]
+  const endCellId = startCell.distances().max(edgeIds)[0]
+  const endCell = this.gridIdentifiers[endCellId]
+
+  startCell.openEdge()
+  endCell.openEdge()
+}
+
 // Circular grid functions
 
 function PolarCell(column, row) {
@@ -280,9 +300,7 @@ PolarCell.prototype.updateNeighbors = function () {
 }
 
 PolarCell.prototype.borders = function () {
-  const borders = []
-  if (this.outward.length === 0) borders.push('outward')
-  return borders
+  if (this.outward.length === 0) return ['outward']
 }
 
 function PolarGrid(rows) {
@@ -295,7 +313,7 @@ PolarGrid.prototype.constructor = PolarGrid;
 PolarGrid.prototype.getCell = function (row, col) {
   if (!this.grid[row]) {
     return null
-  } else if (col > this.grid[row].length) {
+  } else if (col >= this.grid[row].length) {
     return this.grid[row][col % this.grid[row].length]
   } else if (col < 0) {
     return this.grid[row][mod(col, this.grid[row].length)]
@@ -343,7 +361,54 @@ PolarGrid.prototype.configureCells = function () {
 }
 
 PolarGrid.prototype.findEdges = function () {
+  return [...this.grid[this.rows - 1]]
+}
 
+PolarGrid.prototype.drawMaze = function (ctx, settings) {
+  ctx.lineWidth = settings.lineWidth
+  ctx.strokeStyle = settings.strokeStyle
+  const cellSize = settings.cellDimensions[0]
+
+  this.eachCell((cell) => {
+    const theta = 2 * Math.PI / this.grid[cell.row].length
+    const innerRadius = cell.row * cellSize
+    const outerRadius = innerRadius + cellSize
+    const thetaCCW = cell.column * theta
+    const thetaCW = thetaCCW + theta
+
+    const center = settings.position
+    const sinCW = Math.sin(thetaCW)
+    const cosCW = Math.cos(thetaCW)
+
+    const cx = center[0] + innerRadius * cosCW
+    const cy = center[1] + innerRadius * sinCW
+    const dx = center[0] + outerRadius * cosCW
+    const dy = center[1] + outerRadius * sinCW
+    
+    if (!cell.linked(cell.cw) && cell.row !== 0) drawLine(ctx, cx, cy, dx, dy)
+    if (!cell.linked(cell.inward)) drawArc(ctx, ...center, innerRadius, thetaCCW, thetaCW)
+    if (cell.outward.length === 0 && Object.keys(cell.openings).length === 0) {
+      drawArc(ctx, ...center, outerRadius, thetaCCW, thetaCW)
+    }
+  })
+}
+
+PolarGrid.prototype.resizeMaze = function(width, height, settings) {
+  const n = state.maze.rows
+  const diameter = Math.min(width, height - 2 * state.padding)
+  const cellSize = diameter / (2 * n)
+  const xPosition = width / 2
+  const yPosition = height / 2 + state.padding / 2
+  settings.cellDimensions = [cellSize, cellSize]
+  settings.position = [xPosition, yPosition]
+}
+
+PolarGrid.prototype.openMaze = function() {
+  let centerDistances = this.getCell(0,0).distances()
+  const edgeIds = this.edges.map((cell) => cell.identifier)
+  const [cellIdentifier, _] = centerDistances.max(edgeIds)
+  const startCell = this.gridIdentifiers[cellIdentifier]
+  startCell.openEdge()
 }
 
 let state = {
@@ -375,6 +440,12 @@ const draw = (ctx) => {
   if (state.maze) {
     state.maze.drawMaze(ctx, state.mazeSettings)
   }
+}
+
+const drawArc = (ctx, x, y, radius, startAngle, endAngle) => {
+  ctx.beginPath()
+  ctx.arc(x, y, radius, startAngle, endAngle)
+  ctx.stroke()
 }
 
 const drawLine = (ctx, x1, y1, x2, y2) => {
@@ -416,16 +487,7 @@ const updateColors = () => {
 
 const openMaze = () => {
   if (state.maze) {
-    // get distances on edge
-    let edgeDistances = state.maze.edges[0].distances()
-    const edgeIds = state.maze.edges.map((cell) => cell.identifier)
-    const [cellIdentifier, _] = edgeDistances.max(edgeIds)
-    const startCell = state.maze.gridIdentifiers[cellIdentifier]
-    const endCellId = startCell.distances().max(edgeIds)[0]
-    const endCell = state.maze.gridIdentifiers[endCellId]
-
-    startCell.openEdge()
-    endCell.openEdge()
+    state.maze.openMaze()
   }
 }
 
@@ -434,10 +496,11 @@ const generateMaze = () => {
   state.mazeSettings.algorithm = algorithms[algo.value]
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
-  state.maze = state.mazeSettings.algorithm(new Grid(x, y))
+  state.maze = state.mazeSettings.algorithm(new PolarGrid(x))
   state.maze.updateDistances()
   updateColors()
-  resizeMaze(document.getElementById('gs'))
+  const canvas = document.getElementById('gs')
+  if (state.maze) state.maze.resizeMaze(canvas.width, canvas.height, state.mazeSettings)
 }
 
 const preDraw = (canvas, ctx) => {
@@ -448,25 +511,7 @@ const resizeCanvas = (canvas) => {
   if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
-    resizeMaze(canvas)
-  }
-}
-
-/**
- * Updates parameters for the maze.
- * @param {HTMLCanvasElement} canvas 
- */
-const resizeMaze = (canvas) => {
-  if (state.maze) {
-    const nX = state.maze.columns
-    const nY = state.maze.rows
-    const maxCellWidth = (canvas.width - 2 * state.padding) / nX
-    const maxCellHeight = (canvas.height - 2 * state.padding) / nY
-    const cellSize = Math.min(maxCellWidth, maxCellHeight)
-    const xPosition = canvas.width / 2 - nX * cellSize / 2
-    const yPosition = canvas.height / 2 - nY * cellSize / 2
-    state.mazeSettings.cellDimensions = [cellSize, cellSize]
-    state.mazeSettings.position = [xPosition, yPosition]
+    if (state.maze) state.maze.resizeMaze(canvas.width, canvas.height, state.mazeSettings)
   }
 }
 
