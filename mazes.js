@@ -460,29 +460,6 @@ const drawLine = (ctx, x1, y1, x2, y2) => {
   ctx.stroke()
 }
 
-/**
- * 
- * @param {CanvasRenderingContext2D} ctx 
- * @param {*} param1 
- * @param {*} maze 
- */
-const drawMazeIndices = (ctx, { position, cellDimensions }, maze) => {
-  let x = position[0] + cellDimensions[0] / 2
-  let y = position[1] + cellDimensions[1] / 2
-  let nCellX = maze.length - 1
-  let nCellY = maze[0].length - 1
-
-  ctx.textAlign = 'center';
-  for (let i = 0; i < nCellY; i++) {
-    for (let j = 0; j < nCellX; j++) {
-      ctx.fillText((i * nCellX + j).toString(), x, y);
-      x += cellDimensions[0]
-    }
-    y += cellDimensions[1]
-    x -= cellDimensions[0] * nCellX
-  }
-}
-
 const updateColors = () => {
   if (state.maze && state.maze.distances) {
     state.maze.updateColors(state.mazeSettings)
