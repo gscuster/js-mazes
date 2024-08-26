@@ -321,6 +321,10 @@ PolarGrid.prototype.getCell = function (row, col) {
   return this.grid[row][col]
 }
 
+PolarGrid.prototype.size = function () {
+  return this.grid.reduce((total, a) => total + a.length, 0)
+}
+
 PolarGrid.prototype.prepareGrid = function () {
   const rowHeight = 1.0 / this.rows
   const grid = [[new PolarCell(0, 0)]]
@@ -494,9 +498,13 @@ const openMaze = () => {
 const generateMaze = () => {
   const algo = document.getElementById('algorithm')
   state.mazeSettings.algorithm = algorithms[algo.value]
+
+  const gridType = document.getElementById('gridtype')
+  state.mazeSettings.gridType = gridTypes[gridType.value]
+
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
-  state.maze = state.mazeSettings.algorithm(new PolarGrid(x))
+  state.maze = state.mazeSettings.algorithm(new state.mazeSettings.gridType(x, y))
   state.maze.updateDistances()
   updateColors()
   const canvas = document.getElementById('gs')
@@ -680,8 +688,8 @@ const huntKill = (grid) => {
       current = null
 
       // Need a loop through cells we can break, grid.eachCell won't work
-      for (let i = 0, j = 0; i < grid.rows; (j === grid.columns - 1) ? [i++, j=0] : j++) {
-        const cell = grid.getCell[i][j]
+      for (let i = 0, j = 0; i < grid.rows; (j === grid.grid[i].length - 1) ? [i++, j=0] : j++) {
+        const cell = grid.getCell(i, j)
         const visitedNeighbors = cell.neighbors.filter((neighbor) => {
           return Object.keys(neighbor.links).length > 0
         })
@@ -726,6 +734,11 @@ const algorithms = {
   "Wilson": wilson,
 }
 
+const gridTypes = {
+  "Square": Grid,
+  "Polar": PolarGrid
+}
+
 const setupMenu = () => {
   document.getElementById('generate').onclick = generateMaze
 
@@ -734,10 +747,18 @@ const setupMenu = () => {
   document.getElementById('color').oninput = updateColors
 
   const algoSelect = document.getElementById('algorithm')
-  for (const [key, value] of Object.entries(algorithms)) {
+  for (const key of Object.keys(algorithms)) {
     const opt = document.createElement('option')
     opt.value = key
     opt.innerHTML = key
     algoSelect.appendChild(opt)
+  }
+
+  const gridSelect = document.getElementById('gridtype')
+  for (const key of Object.keys(gridTypes)) {
+    const opt = document.createElement('option')
+    opt.value = key
+    opt.innerHTML = key
+    gridSelect.appendChild(opt)
   }
 }
