@@ -278,6 +278,18 @@ Grid.prototype.openMaze = function() {
   endCell.openEdge()
 }
 
+Grid.prototype.braid = function (p = 0.75) {
+  this.deadEnds().forEach((cell) => {
+    if (Object.keys(cell.links).length === 1
+      && Math.random() < p) {
+      const neighbors = cell.neighbors.filter((neighbor => !cell.linked(neighbor)))
+      let best = neighbors.filter((neighbor) => Object.keys(neighbor.links).length === 1)
+      if (best.length === 0) best = neighbors
+      cell.link(sample(best))
+    }
+  })
+}
+
 // Circular grid functions
 
 function PolarCell(column, row) {
@@ -479,9 +491,12 @@ const generateMaze = () => {
   const gridType = document.getElementById('gridtype')
   state.mazeSettings.gridType = gridTypes[gridType.value]
 
+  const braid = document.getElementById('braid').checked
+
   const x = parseInt(document.getElementById('ncellx').value)
   const y = parseInt(document.getElementById('ncelly').value)
   state.maze = state.mazeSettings.algorithm(new state.mazeSettings.gridType(x, y))
+  if (braid) state.maze.braid()
   state.maze.updateDistances()
   updateColors()
   const canvas = document.getElementById('gs')
