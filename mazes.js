@@ -217,6 +217,60 @@ Grid.prototype.deadEnds = function () {
   return result
 }
 
+const drawCellWithoutInset = (ctx, settings, cell, x, y) => {
+  const x2 = x + settings.cellDimensions[0]
+  const y2 = y + settings.cellDimensions[1]
+  if (!cell.north && !cell.openings.north) drawLine(ctx, x, y, x2, y)
+  if (!cell.west && !cell.openings.west) drawLine(ctx, x, y, x, y2)
+  if (!cell.linked(cell.south) && !cell.openings.south) drawLine(ctx, x, y2, x2, y2)
+  if (!cell.linked(cell.east) && !cell.openings.east) drawLine(ctx, x2, y, x2, y2)
+}
+
+const insetCellCoords = (x, y, cellSize, inset) => {
+  const insetAdj = inset*cellSize
+  const x4 = x + cellSize
+  const x2 = x + insetAdj
+  const x3 = x4 - insetAdj
+
+  const y4 = y + cellSize
+  const y2 = y + insetAdj
+  const y3 = y4 - insetAdj
+  
+  return [x, x2, x3, x4, y, y2, y3, y4]
+}
+
+const drawCellWithInset = (ctx, settings, cell, x, y, inset) => {
+  [x1, x2, x3, x4, y1, y2, y3, y4] =
+    insetCellCoords(x, y, settings.cellDimensions[0], inset)
+  if (cell.linked(cell.north) || cell.openings.north) {
+    drawLine(ctx, x2, y1, x2, y2)
+    drawLine(ctx, x3, y1, x3, y2)
+  } else {
+    drawLine(ctx, x2, y2, x3, y2)
+  }
+
+  if (cell.linked(cell.south) || cell.openings.south) {
+    drawLine(ctx, x2, y3, x2, y4)
+    drawLine(ctx, x3, y3, x3, y4)
+  } else {
+    drawLine(ctx, x2, y3, x3, y3)
+  }
+
+  if (cell.linked(cell.west) || cell.openings.west) {
+    drawLine(ctx, x1, y2, x2, y2)
+    drawLine(ctx, x1, y3, x2, y3)
+  } else {
+    drawLine(ctx, x2, y2, x2, y3)
+  }
+
+  if (cell.linked(cell.east) || cell.openings.east) {
+    drawLine(ctx, x3, y2, x4, y2)
+    drawLine(ctx, x3, y3, x4, y3)
+  } else {
+    drawLine(ctx, x3, y2, x3, y3)
+  }
+}
+
 Grid.prototype.drawMaze = function (ctx, settings) {
   ctx.lineWidth = settings.lineWidth
   ctx.strokeStyle = settings.strokeStyle
@@ -224,13 +278,13 @@ Grid.prototype.drawMaze = function (ctx, settings) {
   // Draw color first if present
   if (settings.distanceOn && this.distances) {
     this.eachCell((cell) => {
-      const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
-      const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
+      const x = settings.cellDimensions[0] * cell.column + settings.position[0]
+      const y = settings.cellDimensions[1] * cell.row + settings.position[1]
 
       ctx.fillStyle = cell.color
       ctx.fillRect(
-        x1,
-        y1,
+        x,
+        y,
         settings.cellDimensions[0] + 0.5,
         settings.cellDimensions[1] + 0.5
       )
@@ -239,33 +293,32 @@ Grid.prototype.drawMaze = function (ctx, settings) {
 
   // Draw maze
   this.eachCell((cell) => {
-    const x1 = settings.cellDimensions[0] * cell.column + settings.position[0]
-    const y1 = settings.cellDimensions[1] * cell.row + settings.position[1]
-    const x2 = x1 + settings.cellDimensions[0]
-    const y2 = y1 + settings.cellDimensions[1]
-    if (!cell.north && !cell.openings.north) drawLine(ctx, x1, y1, x2, y1)
-    if (!cell.west && !cell.openings.west) drawLine(ctx, x1, y1, x1, y2)
-    if (!cell.linked(cell.south) && !cell.openings.south) drawLine(ctx, x1, y2, x2, y2)
-    if (!cell.linked(cell.east) && !cell.openings.east) drawLine(ctx, x2, y1, x2, y2)
+    const x = settings.cellDimensions[0] * cell.column + settings.position[0]
+    const y = settings.cellDimensions[1] * cell.row + settings.position[1]
+    if (settings.inset) {
+      drawCellWithInset(ctx, settings, cell, x, y, settings.inset)
+    } else {
+      drawCellWithoutInset(ctx, settings, cell, x, y)
+    }
   })
 }
 
 /**
  * Updates parameters for the maze.
  */
-Grid.prototype.resizeMaze = function(width, height, settings) {
+Grid.prototype.resizeMaze = function (width, height, settings) {
   const nX = state.maze.columns
   const nY = state.maze.rows
   const maxCellWidth = (width - 2 * state.padding) / nX
   const maxCellHeight = (height - 2 * state.padding) / nY
   const cellSize = Math.min(maxCellWidth, maxCellHeight)
-  const xPosition = width / 2 - nX * cellSize / 2
-  const yPosition = height / 2 - nY * cellSize / 2
+  const xPosition = (width - nX * cellSize) / 2
+  const yPosition = (height - nY * cellSize) / 2
   settings.cellDimensions = [cellSize, cellSize]
   settings.position = [xPosition, yPosition]
 }
 
-Grid.prototype.openMaze = function() {
+Grid.prototype.openMaze = function () {
   // get distances on edge
   let edgeDistances = this.edges[0].distances()
   const edgeIds = this.edges.map((cell) => cell.identifier)
@@ -294,7 +347,7 @@ Grid.prototype.braid = function (p = 0.75) {
 
 function PolarCell(column, row) {
   Cell.call(this, column, row)
-  this.ccw  = null
+  this.ccw = null
   this.cw = null
   this.inward = null
   this.outward = []
@@ -344,7 +397,7 @@ PolarGrid.prototype.prepareGrid = function () {
     const radius = i / this.rows
     const circumference = 2 * Math.PI * radius
 
-    const previousCount = grid[i-1].length
+    const previousCount = grid[i - 1].length
     const estimatedWidth = circumference / previousCount
     const ratio = Math.round(estimatedWidth / rowHeight)
     const nCells = previousCount * ratio
@@ -362,10 +415,10 @@ PolarGrid.prototype.configureCells = function () {
     const row = cell.row
     const col = cell.column
     if (row > 0) {
-      cell.cw = this.getCell(row, col+1)
-      cell.ccw = this.getCell(row, col-1)
-      ratio = this.grid[row].length / this.grid[row-1].length
-      parent = this.getCell(row-1, Math.trunc(col / ratio))
+      cell.cw = this.getCell(row, col + 1)
+      cell.ccw = this.getCell(row, col - 1)
+      ratio = this.grid[row].length / this.grid[row - 1].length
+      parent = this.getCell(row - 1, Math.trunc(col / ratio))
       parent.outward.push(cell)
       cell.inward = parent
     }
@@ -400,7 +453,7 @@ PolarGrid.prototype.drawMaze = function (ctx, settings) {
     const cy = center[1] + innerRadius * sinCW
     const dx = center[0] + outerRadius * cosCW
     const dy = center[1] + outerRadius * sinCW
-    
+
     if (!cell.linked(cell.cw) && cell.row !== 0) drawLine(ctx, cx, cy, dx, dy)
     if (!cell.linked(cell.inward)) drawArc(ctx, ...center, innerRadius, thetaCCW, thetaCW)
     if (cell.outward.length === 0 && Object.keys(cell.openings).length === 0) {
@@ -409,29 +462,146 @@ PolarGrid.prototype.drawMaze = function (ctx, settings) {
   })
 }
 
-PolarGrid.prototype.resizeMaze = function(width, height, settings) {
+PolarGrid.prototype.resizeMaze = function (width, height, settings) {
   const n = state.maze.rows
   const diameter = Math.min(width, height - 2 * state.padding)
   const cellSize = diameter / (2 * n)
   const xPosition = width / 2
-  const yPosition = height / 2 + state.padding / 2
+  const yPosition = (height + state.padding) / 2
   settings.cellDimensions = [cellSize, cellSize]
   settings.position = [xPosition, yPosition]
 }
 
-PolarGrid.prototype.openMaze = function() {
-  let centerDistances = this.getCell(0,0).distances()
+PolarGrid.prototype.openMaze = function () {
+  let centerDistances = this.getCell(0, 0).distances()
   const edgeIds = this.edges.map((cell) => cell.identifier)
   const [cellIdentifier, _] = centerDistances.max(edgeIds)
   const startCell = this.gridIdentifiers[cellIdentifier]
   startCell.openEdge()
 }
 
+// Hex Grid
+
+function HexCell(column, row) {
+  Cell.call(this, column, row)
+  this.northwest = null
+  this.northeast = null
+  this.southwest = null
+  this.southeast = null
+}
+HexCell.prototype = Object.create(Cell.prototype);
+HexCell.prototype.constructor = HexCell;
+
+HexCell.prototype.updateNeighbors = function () {
+  const lst = []
+  if (this.north) lst.push(this.north)
+  if (this.south) lst.push(this.south)
+  if (this.northeast) lst.push(this.northeast)
+  if (this.northwest) lst.push(this.northwest)
+  if (this.southeast) lst.push(this.southeast)
+  if (this.southwest) lst.push(this.southwest)
+  this.neighbors = lst
+}
+
+HexCell.prototype.borders = function () {
+  const borders = []
+  if (!this.north) borders.push('north')
+  if (!this.south) borders.push('south')
+  if (!this.northeast) borders.push('northeast')
+  if (!this.northwest) borders.push('northwest')
+  if (!this.southeast) borders.push('southeast')
+  if (!this.southwest) borders.push('southwest')
+  return borders
+}
+
+function HexGrid(columns, rows) {
+  Grid.call(this, columns, rows * 2)
+  this.baseHexagon = polygon(6)
+}
+
+HexGrid.prototype = Object.create(Grid.prototype);
+HexGrid.prototype.constructor = HexGrid;
+
+HexGrid.prototype.size = function () {
+  return this.grid.reduce((total, a) => total + a.length, 0)
+}
+
+HexGrid.prototype.prepareGrid = function () {
+  let grid = []
+  for (let i = 0; i < this.rows; i++) {
+    grid[i] = []
+    for (let j = 0; j < this.columns; j++) {
+      if ((i + j) % 2 === 0) {
+        grid[i][j] = new HexCell(j, i)
+      }
+    }
+  }
+  return grid
+}
+
+HexGrid.prototype.configureCells = function () {
+  this.eachCell((cell) => {
+    const row = cell.row
+    const col = cell.column
+
+    cell.northwest = this.getCell(col - 1, row - 1)
+    cell.north = this.getCell(col, row - 2)
+    cell.northeast = this.getCell(col + 1, row - 1)
+    cell.southwest = this.getCell(col - 1, row + 1)
+    cell.south = this.getCell(col, row + 2)
+    cell.southeast = this.getCell(col + 1, row + 1)
+    cell.updateNeighbors()
+
+    this.gridIdentifiers[cell.identifier] = cell
+  })
+}
+
+HexGrid.prototype.randomCell = function () {
+  let row = Math.floor(Math.random() * this.rows)
+  return sample(this.grid[row])
+}
+
+HexGrid.prototype.drawMaze = function (ctx, settings) {
+  ctx.lineWidth = settings.lineWidth
+  ctx.strokeStyle = settings.strokeStyle
+
+  this.eachCell((cell) => {
+    const xOffset = cell.column * 1.5 * settings.cellDimensions[0]
+    const yOffset = cell.row * SQRT3 * settings.cellDimensions[0] / 2
+    const cellCenter = arrayAdd(settings.position, [xOffset, yOffset])
+    const cellPoly = this.baseHexagon.map(point => arrayAdd(cellCenter, point))
+
+    if (!cell.linked(cell.southeast)) drawLine(ctx, ...cellPoly[0], ...cellPoly[1])
+    if (!cell.linked(cell.south)) drawLine(ctx, ...cellPoly[1], ...cellPoly[2])
+    if (!cell.linked(cell.southwest)) drawLine(ctx, ...cellPoly[2], ...cellPoly[3])
+    if (!cell.linked(cell.northwest)) drawLine(ctx, ...cellPoly[3], ...cellPoly[4])
+    if (!cell.linked(cell.north)) drawLine(ctx, ...cellPoly[4], ...cellPoly[5])
+    if (!cell.linked(cell.northeast)) drawLine(ctx, ...cellPoly[5], ...cellPoly[0])
+  })
+}
+
+HexGrid.prototype.resizeMaze = function (width, height, settings) {
+  const nX = state.maze.columns
+  const nY = state.maze.rows / 2
+  const maxRadiusW = (width - 2 * state.padding) / (1.5 * nX)
+  const maxRadiusH = (height - 2 * state.padding) / (SQRT3 * nY)
+  const cellSize = Math.min(maxRadiusW, maxRadiusH)
+  const xPosition = (width - 1.5 * nX * cellSize) / 2
+  const yPosition = (height - SQRT3 * nY * cellSize) / 2
+  settings.cellDimensions = [cellSize, cellSize]
+  settings.position = [xPosition, yPosition + cellSize]
+
+  this.baseHexagon = this.baseHexagon.map(point => point.map(val => val * cellSize))
+}
+
+// Running/drawing functions
+
 let state = {
   maze: null,
   mazeSettings: {
     algorithm: null,
     cellDimensions: [32, 32],
+    inset: 0.1,
     position: [64, 64],
     lineWidth: 3,
     strokeStyle: '#000000',
@@ -551,9 +721,10 @@ const randInt = (a, b) => {
 }
 
 const sample = (arr) => {
-  if (arr.length > 0) {
-    const idx = randInt(0, arr.length)
-    return arr[idx]
+  const nonNullArr = arr.filter((a) => a !== null)
+  if (nonNullArr.length > 0) {
+    const idx = randInt(0, nonNullArr.length)
+    return nonNullArr[idx]
   }
 }
 
@@ -581,6 +752,20 @@ const colorIncrements = (rgb1, rgb2, resolution) => {
   }
   return increment
 }
+
+const polygon = (nsides) => {
+  var poly = [];
+  var angle = PI2 / nsides;
+  for (var i = 0; i < nsides; i++) {
+    poly[i] = [Math.cos(i * angle), Math.sin(i * angle)];
+  }
+  return poly;
+}
+
+// Constants
+
+const SQRT3 = Math.sqrt(3)
+const PI2 = Math.PI * 2
 
 // Algorithms
 
@@ -650,13 +835,13 @@ const wilson = (grid) => {
       cell = sample(cell.neighbors)
       const position = path.indexOf(cell)
       if (position >= 0) {
-        path = path.slice(0, position+1)
+        path = path.slice(0, position + 1)
       } else {
         path.push(cell)
       }
     }
 
-    for (var i = 0; i < path.length-1; i++) {
+    for (var i = 0; i < path.length - 1; i++) {
       path[i].link(path[i + 1])
       delete unvisited[path[i].identifier]
     }
@@ -680,8 +865,9 @@ const huntKill = (grid) => {
       current = null
 
       // Need a loop through cells we can break, grid.eachCell won't work
-      for (let i = 0, j = 0; i < grid.rows; (j === grid.grid[i].length - 1) ? [i++, j=0] : j++) {
+      for (let i = 0, j = 0; i < grid.rows; (j === grid.grid[i].length - 1) ? [i++, j = 0] : j++) {
         const cell = grid.getCell(i, j)
+        if (!cell) break
         const visitedNeighbors = cell.neighbors.filter((neighbor) => {
           return Object.keys(neighbor.links).length > 0
         })
@@ -728,7 +914,8 @@ const algorithms = {
 
 const gridTypes = {
   "Square": Grid,
-  "Polar": PolarGrid
+  "Polar": PolarGrid,
+  "Hex": HexGrid,
 }
 
 const setupMenu = () => {
