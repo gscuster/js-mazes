@@ -45,7 +45,7 @@ function Cell(column, row) {
   this.west = null
   this.links = {}
   this.openings = {}
-  this.neighbors = []
+  this.cachedNeighbors = []
   this.color = '#ffffff'
 }
 
@@ -71,13 +71,17 @@ Cell.prototype.linked = function (cell) {
   return cell && this.links[cell.identifier]
 }
 
+Cell.prototype.neighbors = function () {
+  return this.cachedNeighbors
+}
+
 Cell.prototype.updateNeighbors = function () {
   const lst = []
   if (this.north) lst.push(this.north)
   if (this.south) lst.push(this.south)
   if (this.east) lst.push(this.east)
   if (this.west) lst.push(this.west)
-  this.neighbors = lst
+  this.cachedNeighbors = lst
 }
 
 Cell.prototype.borders = function () {
@@ -123,6 +127,7 @@ function Grid(columns, rows) {
   this.configureCells()
   this.edges = this.findEdges()
   this.distances = null
+  this.inset = null
 }
 
 Grid.prototype.getCell = function (row, col) {
@@ -187,7 +192,7 @@ Grid.prototype.updateDistances = function () {
 Grid.prototype.findEdges = function () {
   const edges = []
   this.eachCell((cell) => {
-    if (cell.neighbors.length < 4) edges.push(cell)
+    if (cell.neighbors().length < 4) edges.push(cell)
   })
   return edges
 }
@@ -217,7 +222,7 @@ Grid.prototype.deadEnds = function () {
   return result
 }
 
-const drawCellWithoutInset = (ctx, settings, cell, x, y) => {
+Grid.prototype.drawCellWithoutInset = function (ctx, settings, cell, x, y) {
   const x2 = x + settings.cellDimensions[0]
   const y2 = y + settings.cellDimensions[1]
   if (!cell.north && !cell.openings.north) drawLine(ctx, x, y, x2, y)
@@ -227,7 +232,7 @@ const drawCellWithoutInset = (ctx, settings, cell, x, y) => {
 }
 
 const insetCellCoords = (x, y, cellSize, inset) => {
-  const insetAdj = inset*cellSize
+  const insetAdj = inset * cellSize
   const x4 = x + cellSize
   const x2 = x + insetAdj
   const x3 = x4 - insetAdj
@@ -235,11 +240,11 @@ const insetCellCoords = (x, y, cellSize, inset) => {
   const y4 = y + cellSize
   const y2 = y + insetAdj
   const y3 = y4 - insetAdj
-  
+
   return [x, x2, x3, x4, y, y2, y3, y4]
 }
 
-const drawCellWithInset = (ctx, settings, cell, x, y, inset) => {
+Grid.prototype.drawCellWithInset = function (ctx, settings, cell, x, y, inset) {
   [x1, x2, x3, x4, y1, y2, y3, y4] =
     insetCellCoords(x, y, settings.cellDimensions[0], inset)
   if (cell.linked(cell.north) || cell.openings.north) {
@@ -295,10 +300,10 @@ Grid.prototype.drawMaze = function (ctx, settings) {
   this.eachCell((cell) => {
     const x = settings.cellDimensions[0] * cell.column + settings.position[0]
     const y = settings.cellDimensions[1] * cell.row + settings.position[1]
-    if (settings.inset) {
-      drawCellWithInset(ctx, settings, cell, x, y, settings.inset)
+    if (this.inset) {
+      this.drawCellWithInset(ctx, settings, cell, x, y, this.inset)
     } else {
-      drawCellWithoutInset(ctx, settings, cell, x, y)
+      this.drawCellWithoutInset(ctx, settings, cell, x, y)
     }
   })
 }
@@ -335,7 +340,7 @@ Grid.prototype.braid = function (p = 0.75) {
   this.deadEnds().forEach((cell) => {
     if (Object.keys(cell.links).length === 1
       && Math.random() < p) {
-      const neighbors = cell.neighbors.filter((neighbor => !cell.linked(neighbor)))
+      const neighbors = cell.neighbors().filter((neighbor => !cell.linked(neighbor)))
       let best = neighbors.filter((neighbor) => Object.keys(neighbor.links).length === 1)
       if (best.length === 0) best = neighbors
       cell.link(sample(best))
@@ -361,7 +366,7 @@ PolarCell.prototype.updateNeighbors = function () {
   if (this.cw) lst.push(this.cw)
   if (this.inward) lst.push(this.inward)
   lst.concat(this.outward)
-  this.neighbors = lst.concat(this.outward)
+  this.cachedNeighbors = lst.concat(this.outward)
 }
 
 PolarCell.prototype.borders = function () {
@@ -500,7 +505,7 @@ HexCell.prototype.updateNeighbors = function () {
   if (this.northwest) lst.push(this.northwest)
   if (this.southeast) lst.push(this.southeast)
   if (this.southwest) lst.push(this.southwest)
-  this.neighbors = lst
+  this.cachedNeighbors = lst
 }
 
 HexCell.prototype.borders = function () {
@@ -594,6 +599,151 @@ HexGrid.prototype.resizeMaze = function (width, height, settings) {
   this.baseHexagon = this.baseHexagon.map(point => point.map(val => val * cellSize))
 }
 
+// Weave functions
+function OverCell(column, row, grid) {
+  Cell.call(this, column, row)
+  this.grid = grid
+}
+OverCell.prototype = Object.create(Cell.prototype);
+OverCell.prototype.constructor = OverCell;
+
+OverCell.prototype.horizontalPassage = function () {
+  return this.linked(this.east) && this.linked(this.west) &&
+    !this.linked(this.north) && !this.linked(this.south)
+}
+
+OverCell.prototype.verticalPassage = function () {
+  return !this.linked(this.east) && !this.linked(this.west) &&
+    this.linked(this.north) && this.linked(this.south)
+}
+
+OverCell.prototype.passage = function (dir) {
+  if (dir === 'north' || dir === 'south') return this.horizontalPassage()
+  return this.verticalPassage()
+}
+
+OverCell.prototype.canTunnel = function (dir) {
+  return this[dir] && this[dir][dir] && this[dir].passage(dir)
+}
+
+OverCell.prototype.neighbors = function () {
+  const lst = Cell.prototype.neighbors.call(this)
+  if (this.canTunnel('north')) lst.push(this.north.north)
+  if (this.canTunnel('south')) lst.push(this.south.south)
+  if (this.canTunnel('east')) lst.push(this.east.east)
+  if (this.canTunnel('west')) lst.push(this.west.west)
+  return lst
+}
+
+OverCell.prototype.link = function (cell, bidi=true) {
+  let neighbor = null
+  if (this.north && this.north === cell.south) {
+    neighbor = this.north
+  } else if (this.south && this.south === cell.north) {
+    neighbor = this.south
+  } else if (this.east && this.east === cell.west) {
+    neighbor = this.east
+  } else if (this.west && this.west === cell.east) {
+    neighbor = this.west
+  }
+
+  if (neighbor) {
+    this.grid.tunnelUnder(neighbor)
+  } else {
+    Cell.prototype.link.call(this, cell, bidi)
+  }
+}
+
+function UnderCell(overCell, grid) {
+  Cell.call(this, overCell.column, overCell.row)
+  this.identifier = this.identifier + 'under'
+  grid.gridIdentifiers[this.identifier] = this
+
+  if (overCell.horizontalPassage()) {
+    this.north = overCell.north
+    overCell.north.south = this
+    this.south = overCell.south
+    overCell.south.north = this
+    this.link(this.north)
+    this.link(this.south)
+  } else {
+    this.east = overCell.east
+    overCell.east.west = this
+    this.west = overCell.west
+    overCell.west.east = this
+    this.link(this.east)
+    this.link(this.west)
+  }
+}
+UnderCell.prototype = Object.create(Cell.prototype);
+UnderCell.prototype.constructor = UnderCell;
+
+UnderCell.prototype.horizontalPassage = function () {
+  return this.east || this.west
+}
+
+UnderCell.prototype.verticalPassage = function () {
+  return this.north || this.south
+}
+
+UnderCell.prototype.passage = function (dir) {
+  return false
+}
+
+function WeaveGrid(columns, rows, inset = 0.1) {
+  this.underCells = []
+  Grid.call(this, columns, rows)
+  this.inset = inset
+}
+
+WeaveGrid.prototype = Object.create(Grid.prototype);
+WeaveGrid.prototype.constructor = WeaveGrid;
+
+WeaveGrid.prototype.size = function () {
+  return this.grid.reduce((total, a) => total + a.length, 0)
+}
+
+WeaveGrid.prototype.prepareGrid = function () {
+  let grid = []
+  for (let i = 0; i < this.rows; i++) {
+    grid[i] = []
+    for (let j = 0; j < this.columns; j++) {
+      grid[i][j] = new OverCell(j, i, this)
+    }
+  }
+  return grid
+}
+
+WeaveGrid.prototype.tunnelUnder = function (overCell) {
+  const underCell = new UnderCell(overCell, this)
+  this.underCells.push(underCell)
+}
+
+WeaveGrid.prototype.eachCell = function (fn) {
+  Grid.prototype.eachCell.call(this, fn)
+  this.underCells.forEach((cell) => fn(cell))
+}
+
+WeaveGrid.prototype.drawCellWithInset = function (ctx, settings, cell, x, y, inset) {
+  if (cell instanceof OverCell) {
+    Grid.prototype.drawCellWithInset.call(this, ctx, settings, cell, x, y, inset)
+  } else {
+    [x1, x2, x3, x4, y1, y2, y3, y4] =
+    insetCellCoords(x, y, settings.cellDimensions[0], inset)
+    if (cell.verticalPassage()) {
+      drawLine(ctx, x2, y1, x2, y2)
+      drawLine(ctx, x3, y1, x3, y2)
+      drawLine(ctx, x2, y3, x2, y4)
+      drawLine(ctx, x3, y3, x3, y4)
+    } else {
+      drawLine(ctx, x1, y2, x2, y2)
+      drawLine(ctx, x1, y3, x2, y3)
+      drawLine(ctx, x3, y2, x4, y2)
+      drawLine(ctx, x3, y3, x4, y3)
+    }
+  }
+}
+
 // Running/drawing functions
 
 let state = {
@@ -601,7 +751,6 @@ let state = {
   mazeSettings: {
     algorithm: null,
     cellDimensions: [32, 32],
-    inset: 0.1,
     position: [64, 64],
     lineWidth: 3,
     strokeStyle: '#000000',
@@ -811,7 +960,7 @@ const aldousBroder = (grid) => {
   let cell = grid.randomCell()
   let unvisited = grid.size() - 1
   while (unvisited > 0) {
-    const neighbor = sample(cell.neighbors)
+    const neighbor = sample(cell.neighbors())
     if (Object.keys(neighbor.links).length === 0) {
       cell.link(neighbor)
       unvisited -= 1
@@ -832,7 +981,7 @@ const wilson = (grid) => {
     let cell = sampleValues(unvisited)
     let path = [cell]
     while (unvisited[cell.identifier]) {
-      cell = sample(cell.neighbors)
+      cell = sample(cell.neighbors())
       const position = path.indexOf(cell)
       if (position >= 0) {
         path = path.slice(0, position + 1)
@@ -853,7 +1002,7 @@ const wilson = (grid) => {
 const huntKill = (grid) => {
   let current = grid.randomCell()
   while (current) {
-    const unvisitedNeighbors = current.neighbors.filter((neighbor) => {
+    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
       return Object.keys(neighbor.links).length === 0
     })
 
@@ -868,7 +1017,7 @@ const huntKill = (grid) => {
       for (let i = 0, j = 0; i < grid.rows; (j === grid.grid[i].length - 1) ? [i++, j = 0] : j++) {
         const cell = grid.getCell(i, j)
         if (!cell) break
-        const visitedNeighbors = cell.neighbors.filter((neighbor) => {
+        const visitedNeighbors = cell.neighbors().filter((neighbor) => {
           return Object.keys(neighbor.links).length > 0
         })
         if (Object.keys(cell.links).length === 0 && visitedNeighbors.length > 0) {
@@ -889,7 +1038,7 @@ const recursiveBacktracker = (grid) => {
 
   while (stack.length > 0) {
     const current = stack[stack.length - 1]
-    const unvisitedNeighbors = current.neighbors.filter((neighbor) => {
+    const unvisitedNeighbors = current.neighbors().filter((neighbor) => {
       return Object.keys(neighbor.links).length === 0
     })
     if (unvisitedNeighbors.length === 0) {
@@ -913,6 +1062,7 @@ const algorithms = {
 }
 
 const gridTypes = {
+  "Weave": WeaveGrid,
   "Square": Grid,
   "Polar": PolarGrid,
   "Hex": HexGrid,
