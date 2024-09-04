@@ -549,12 +549,12 @@ HexGrid.prototype.configureCells = function () {
     const row = cell.row
     const col = cell.column
 
-    cell.northwest = this.getCell(col - 1, row - 1)
-    cell.north = this.getCell(col, row - 2)
-    cell.northeast = this.getCell(col + 1, row - 1)
-    cell.southwest = this.getCell(col - 1, row + 1)
-    cell.south = this.getCell(col, row + 2)
-    cell.southeast = this.getCell(col + 1, row + 1)
+    cell.northwest = this.getCell(row - 1, col - 1)
+    cell.north = this.getCell(row - 2, col)
+    cell.northeast = this.getCell(row - 1, col + 1)
+    cell.southwest = this.getCell(row + 1, col - 1)
+    cell.south = this.getCell(row + 2, col)
+    cell.southeast = this.getCell(row + 1, col + 1)
     cell.updateNeighbors()
 
     this.gridIdentifiers[cell.identifier] = cell
@@ -576,12 +576,24 @@ HexGrid.prototype.drawMaze = function (ctx, settings) {
     const cellCenter = arrayAdd(settings.position, [xOffset, yOffset])
     const cellPoly = this.baseHexagon.map(point => arrayAdd(cellCenter, point))
 
-    if (!cell.linked(cell.southeast)) drawLine(ctx, ...cellPoly[0], ...cellPoly[1])
-    if (!cell.linked(cell.south)) drawLine(ctx, ...cellPoly[1], ...cellPoly[2])
-    if (!cell.linked(cell.southwest)) drawLine(ctx, ...cellPoly[2], ...cellPoly[3])
-    if (!cell.linked(cell.northwest)) drawLine(ctx, ...cellPoly[3], ...cellPoly[4])
-    if (!cell.linked(cell.north)) drawLine(ctx, ...cellPoly[4], ...cellPoly[5])
-    if (!cell.linked(cell.northeast)) drawLine(ctx, ...cellPoly[5], ...cellPoly[0])
+    if (!cell.linked(cell.southeast) && !cell.openings.southeast) {
+      drawLine(ctx, ...cellPoly[0], ...cellPoly[1])
+    }
+    if (!cell.linked(cell.south) && !cell.openings.south) {
+      drawLine(ctx, ...cellPoly[1], ...cellPoly[2])
+    }
+    if (!cell.linked(cell.southwest) && !cell.openings.southwest) {
+      drawLine(ctx, ...cellPoly[2], ...cellPoly[3])
+    }
+    if (!cell.linked(cell.northwest) && !cell.openings.northwest) {
+      drawLine(ctx, ...cellPoly[3], ...cellPoly[4])
+    }
+    if (!cell.linked(cell.north) && !cell.openings.north) {
+      drawLine(ctx, ...cellPoly[4], ...cellPoly[5])
+    }
+    if (!cell.linked(cell.northeast) && !cell.openings.northeast) {
+      drawLine(ctx, ...cellPoly[5], ...cellPoly[0])
+    }
   })
 }
 
@@ -596,7 +608,8 @@ HexGrid.prototype.resizeMaze = function (width, height, settings) {
   settings.cellDimensions = [cellSize, cellSize]
   settings.position = [xPosition, yPosition + cellSize]
 
-  this.baseHexagon = this.baseHexagon.map(point => point.map(val => val * cellSize))
+
+  this.baseHexagon = polygon(6).map(point => point.map(val => val * cellSize))
 }
 
 // Weave functions
@@ -1062,10 +1075,10 @@ const algorithms = {
 }
 
 const gridTypes = {
+  "Hex": HexGrid,
   "Weave": WeaveGrid,
   "Square": Grid,
   "Polar": PolarGrid,
-  "Hex": HexGrid,
 }
 
 const setupMenu = () => {
