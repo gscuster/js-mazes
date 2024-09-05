@@ -612,6 +612,116 @@ HexGrid.prototype.resizeMaze = function (width, height, settings) {
   this.baseHexagon = polygon(6).map(point => point.map(val => val * cellSize))
 }
 
+// Triangle grid functions
+function TriCell(column, row) {
+  Cell.call(this, column, row)
+}
+TriCell.prototype = Object.create(Cell.prototype);
+TriCell.prototype.constructor = TriCell;
+
+TriCell.prototype.upright = function () {
+  return (this.row + this.column) % 2 === 0
+}
+
+TriCell.prototype.updateNeighbors = function () {
+  const lst = []
+  if (this.west) lst.push(this.west)
+  if (this.east) lst.push(this.east)
+  if (this.upright()) {
+    if (this.south) lst.push(this.south)
+  } else {
+    if (this.north) lst.push(this.north)
+  }
+  this.cachedNeighbors = lst
+}
+
+function TriGrid(columns, rows) {
+  Grid.call(this, columns, rows)
+}
+
+TriGrid.prototype = Object.create(Grid.prototype);
+TriGrid.prototype.constructor = TriGrid;
+
+TriGrid.prototype.prepareGrid = function () {
+  let grid = []
+  for (let i = 0; i < this.rows; i++) {
+    grid[i] = []
+    for (let j = 0; j < this.columns; j++) {
+      grid[i][j] = new TriCell(j, i)
+    }
+  }
+  return grid
+}
+
+TriGrid.prototype.configureCells = function () {
+  this.eachCell((cell) => {
+    const row = cell.row
+    const col = cell.column
+
+    cell.west = this.getCell(row, col - 1)
+    cell.east = this.getCell(row, col + 1)
+    if (cell.upright()) {
+      cell.south = this.getCell(row + 1, col)
+    } else {
+      cell.north = this.getCell(row - 1, col)
+    }
+    cell.updateNeighbors()
+
+    this.gridIdentifiers[cell.identifier] = cell
+  })
+}
+
+TriGrid.prototype.drawMaze = function (ctx, settings) {
+  ctx.lineWidth = settings.lineWidth
+  ctx.strokeStyle = settings.strokeStyle
+
+  const cellSize = settings.cellDimensions[0]
+  const halfWidth = cellSize / 2
+  const height = cellSize * SQRT3 / 2
+  const halfHeight = height / 2
+
+  this.eachCell((cell) => {
+    const cx = halfWidth + cell.column * halfWidth + settings.position[0]
+    const cy = halfHeight + cell.row * height + settings.position[1]
+
+    const westX = cx - halfWidth
+    const eastX = cx + halfWidth
+    
+    let apexY, baseY
+    if (cell.upright()) {
+      apexY = cy - halfHeight
+      baseY = cy + halfHeight
+    } else {
+      apexY = cy + halfHeight
+      baseY = cy - halfHeight
+    }
+
+    if (!cell.west && !cell.openings.west) {
+      drawLine(ctx, westX, baseY, cx, apexY)
+    }
+
+    if (!cell.linked(cell.east) && !cell.openings.east) {
+      drawLine(ctx, eastX, baseY, cx, apexY)
+    }
+
+    const noSouth = cell.upright() && !cell.south
+    const notLinked = !cell.upright() && !cell.linked(cell.north)
+    if (noSouth || notLinked) drawLine(ctx, eastX, baseY, westX, baseY)
+  })
+}
+
+TriGrid.prototype.resizeMaze = function (width, height, settings) {
+  const nX = state.maze.columns
+  const nY = state.maze.rows
+  const maxRadiusW = (width - 2 * state.padding) / (nX / 2)
+  const maxRadiusH = (height - 2 * state.padding) / (nY * SQRT3 / 2)
+  const cellSize = Math.min(maxRadiusW, maxRadiusH)
+  const xPosition = width / 2 - nX * cellSize / 4 - 0.25 * cellSize
+  const yPosition = (height - nY * cellSize) / 2
+  settings.cellDimensions = [cellSize, cellSize]
+  settings.position = [xPosition, yPosition + cellSize]
+}
+
 // Weave functions
 function OverCell(column, row, grid) {
   Cell.call(this, column, row)
@@ -915,11 +1025,11 @@ const colorIncrements = (rgb1, rgb2, resolution) => {
   return increment
 }
 
-const polygon = (nsides) => {
+const polygon = (nsides, rotation = 0) => {
   var poly = [];
   var angle = PI2 / nsides;
   for (var i = 0; i < nsides; i++) {
-    poly[i] = [Math.cos(i * angle), Math.sin(i * angle)];
+    poly[i] = [Math.cos(i * angle + rotation), Math.sin(i * angle + rotation)];
   }
   return poly;
 }
@@ -928,6 +1038,7 @@ const polygon = (nsides) => {
 
 const SQRT3 = Math.sqrt(3)
 const PI2 = Math.PI * 2
+const PI_2 = Math.PI / 2
 
 // Algorithms
 
@@ -1075,6 +1186,7 @@ const algorithms = {
 }
 
 const gridTypes = {
+  "Triangle": TriGrid,
   "Hex": HexGrid,
   "Weave": WeaveGrid,
   "Square": Grid,
